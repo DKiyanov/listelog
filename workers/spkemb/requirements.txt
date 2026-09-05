@@ -1,0 +1,4 @@
+websockets
+soundfile
+numpy
+onnxruntime

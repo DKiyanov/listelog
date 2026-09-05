@@ -1,0 +1,18 @@
+{
+    "port": 8732,
+
+    "ldap_domain": "atommash.ru",
+    "ldap_server": "atommash.ru",
+
+    "tokens_file_path": "../server_folders/users/tokens.json",
+    "token_lifetime_hours": 1000,
+
+    "audio_data_dir": "../server_folders/audio_data",
+    "sessions_dir": "../server_folders/sessions",
+    "users_dir": "../server_folders/users",
+    "site_dir": "../site",
+
+    "verbose": true,
+    
+    "demo_login": "TEST"
+}

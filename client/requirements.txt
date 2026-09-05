@@ -1,0 +1,9 @@
+flet==0.85.1
+numpy
+ffmpeg-python
+pygame
+soundcard
+soundfile
+httpx
+keyring
+onnxruntime==1.26.0

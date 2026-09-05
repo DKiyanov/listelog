@@ -1,0 +1,12 @@
+{
+    "mode": "ws",
+    
+    "main_url": "ws://localhost:8732",
+    "wait_time": 2,
+    
+    "audio_data_dir": "C:/python_projects/dksttd/server_folders/audio_data",
+    "sessions_dir": "C:/python_projects/dksttd/server_folders/sessions",
+    "users_dir": "C:/python_projects/dksttd/server_folders/users",
+
+    "verbose": true
+}

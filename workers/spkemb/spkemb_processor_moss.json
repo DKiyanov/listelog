@@ -1,0 +1,9 @@
+{
+    "silero_vad_model_path" : "./models/silero-vad/silero_vad.onnx",
+    "wespeaker_model_path" : "./models/wespeaker/wespeaker-wespeaker-voxceleb-redimnet2-B6-LM",
+    "wespeaker_batch_size" : 1,
+    "wespeaker_threshold" : 0.65,
+    "wespeaker_device" : "cuda",
+	"max_duration_kf" : 1.0,
+	"max_duration_add" : 0.0
+}

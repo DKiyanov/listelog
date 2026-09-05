@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Скачать клиент приложения</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            max-width: 500px;
+            text-align: center;
+        }
+        h1 {
+            color: #1a73e8;
+            margin-bottom: 20px;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #5f6368;
+            margin-bottom: 30px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: bold;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.2s, transform 0.1s;
+            color: #fff;
+        }
+        .btn:active {
+            transform: scale(0.98);
+        }
+        .windows {
+            background-color: #0078d4;
+        }
+        .windows:hover {
+            background-color: #005a9e;
+        }
+        .linux {
+            background-color: #222222;
+        }
+        .linux:hover {
+            background-color: #444444;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Добро пожаловать в проект</h1>
+    <p>
+        Наше приложение предоставляет мощный и интуитивно понятный инструмент для автоматизации ваших повседневных задач. Синхронизируйте данные в реальном времени, управляйте проектами в один клик и анализируйте общую эффективность с помощью встроенных модулей аналитики. Кроссплатформенный клиент разработан с упором на высокую скорость работы и минимальное потребление системных ресурсов. Скачайте официальную сборку для вашей операционной системы ниже и начните работу за считанные минуты.
+    </p>
+    <div class="btn-group">
+        <a href="/assets/listelog_win.exe" class="btn windows">Скачать для Windows</a>
+        <a href="/download/listelog_lnx" class="btn linux">Скачать для Linux</a>
+    </div>
+</div>
+
+</body>
+</html>

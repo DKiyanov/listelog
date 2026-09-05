@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+ldap3
+pydantic
+websockets

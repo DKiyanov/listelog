@@ -1,0 +1,49 @@
+version: '3.8'
+
+name: listelog
+
+services:
+  worker-spkemb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker-stage # Указываем собирать финальный этап кода
+      
+    image: spkemb-worker:latest
+    restart: unless-stopped
+    
+    # Включаем поддержку GPU NVIDIA
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    # Монтирование папок (хост : контейнер)
+    volumes:
+      - ${HOST_AUDIO_DATA_DIR}:/data/audio_data  # чтение и запись
+      - ${HOST_SESSIONS_DIR}:/data/sessions      # чтение и запись 
+      - ${HOST_USERS_DIR}:/data/users:ro         # только чтение
+      - ${HOST_MODELS_DIR}:/data/models:ro       # только чтение
+
+    env_file:
+      - .env
+      
+    environment:
+      # Магия для подключения к хосту: host.docker.internal вместо localhost
+      - MAIN_URL=${MAIN_URL:-ws://host.docker.internal}:${PORT}
+    
+      # Перенаправляем пути контейнера на его внутренние точки монтирования
+      - AUDIO_DATA_DIR=/data/audio_data
+      - SESSIONS_DIR=/data/sessions
+      - USERS_DIR=/data/users
+
+      # Переменные окружения внутри контейнера    
+      - SILERO_VAD_MODEL_PATH=/data/models/${SILERO_VAD_MODEL_PATH}
+      - WESPEAKER_MODEL_PATH=/data/models/${WESPEAKER_MODEL_PATH}
+      
+    # Инструкция Docker для разрешения адреса host.docker.internal (особенно важно для Linux)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

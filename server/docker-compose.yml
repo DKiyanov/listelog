@@ -1,0 +1,26 @@
+version: '3.8'
+
+name: listelog
+
+services:
+  server:
+    build: .
+    container_name: listelog_server
+    ports:
+      - "${PORT}:${PORT}"
+    volumes:
+      - ${HOST_AUDIO_DATA_DIR}:/data/audio_data
+      - ${HOST_SESSIONS_DIR}:/data/sessions
+      - ${HOST_USERS_DIR}:/data/users
+      - ${HOST_SITE_DIR}:/data/site
+    env_file:
+      - .env
+    environment:
+      # Перенаправляем пути контейнера на его внутренние точки монтирования
+      - AUDIO_DATA_DIR=/data/audio_data
+      - SESSIONS_DIR=/data/sessions
+      - USERS_DIR=/data/users
+      - SITE_DIR=/data/site
+
+      - TOKENS_FILE_PATH=${HOST_USERS_DIR}/tokens.json
+    restart: always
