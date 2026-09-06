@@ -1,0 +1,11 @@
+Dockerfile
+.git
+.gitignore
+.env
+*.yml
+*.sh
+*.bat
+*.md
+
+.git/
+models/

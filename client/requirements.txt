@@ -6,4 +6,7 @@ soundcard
 soundfile
 httpx
 keyring
+websockets
 onnxruntime==1.26.0
+pyinstaller
+pillow

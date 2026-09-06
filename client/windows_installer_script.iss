@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 ; Non-commercial use only
 
-#define MyAppName "DkSttD"
+#define MyAppName "ListeLog"
 #define MyAppVersion "1.0"
 #define MyAppPublisher "DKiyanov"
 #define MyAppURL "https://www.dkiyanov.com/"
@@ -32,11 +32,10 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; Uncomment the following line to use a 64-bit installer.
 ;SetupArchitecture=x64
 DisableProgramGroupPage=yes
-InfoBeforeFile=before_install.txt
 ; Uncomment the following line to run in non administrative install mode (install for current user only).
 ;PrivilegesRequired=lowest
 OutputDir=inno_setup
-OutputBaseFilename=dksttd
+OutputBaseFilename=ListeLog_win
 SolidCompression=yes
 WizardStyle=modern dynamic
 

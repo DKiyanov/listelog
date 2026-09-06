@@ -6,10 +6,9 @@ services:
   worker-spkemb:
     build:
       context: .
-      dockerfile: Dockerfile
       target: worker-stage # Указываем собирать финальный этап кода
       
-    image: spkemb-worker:latest
+    image: dkiyanov/listelog-worker-spkemb:latest
     restart: unless-stopped
     
     # Включаем поддержку GPU NVIDIA

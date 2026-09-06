@@ -5,22 +5,24 @@ name: listelog
 services:
   server:
     build: .
-    container_name: listelog_server
+    
+    image: dkiyanov/listelog-server:latest
+    container_name: listelog-server
+    restart: unless-stopped
+    
     ports:
       - "${PORT}:${PORT}"
     volumes:
-      - ${HOST_AUDIO_DATA_DIR}:/data/audio_data
-      - ${HOST_SESSIONS_DIR}:/data/sessions
+      - ${HOST_WORK_DIR}:/data/work
       - ${HOST_USERS_DIR}:/data/users
       - ${HOST_SITE_DIR}:/data/site
     env_file:
       - .env
     environment:
       # Перенаправляем пути контейнера на его внутренние точки монтирования
-      - AUDIO_DATA_DIR=/data/audio_data
-      - SESSIONS_DIR=/data/sessions
+      - AUDIO_DATA_DIR=/data/work/audio_data
+      - SESSIONS_DIR=/data/work/sessions
       - USERS_DIR=/data/users
       - SITE_DIR=/data/site
 
-      - TOKENS_FILE_PATH=${HOST_USERS_DIR}/tokens.json
-    restart: always
+      - TOKENS_FILE_PATH=/data/users/tokens.json

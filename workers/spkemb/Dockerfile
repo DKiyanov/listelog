@@ -20,7 +20,6 @@ RUN pip install --no-cache-dir torchaudio --index-url https://pytorch.org
 # Устанавливаем wespeaker
 RUN pip install --no-cache-dir git+https://github.com/wenet-e2e/wespeaker.git
 
-
 # ==============================================================================
 # ЭТАП 2: РАБОЧИЙ ОБРАЗ (Код проекта. Пересобирается мгновенно)
 # ==============================================================================
@@ -31,6 +30,9 @@ WORKDIR /app
 # Установка зависимостей вашего проекта
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Устанавливаем listelog_pyworker_lib
+RUN pip install --no-cache-dir git+https://github.com/DKiyanov/listelog.git@main#subdirectory=workers/listelog_pyworker_lib
 
 # Копирование исходного кода
 COPY . .

@@ -24,5 +24,9 @@ pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128
 
 pip install git+https://github.com/wenet-e2e/wespeaker.git
 
+pip install git+https://github.com/DKiyanov/listelog.git@main#subdirectory=workers/listelog_pyworker_lib
+или
+pip install -e ../listelog_pyworker_lib
+
 Запуск
 python worker_spkemb_moss.py

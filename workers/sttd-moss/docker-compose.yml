@@ -1,0 +1,54 @@
+version: '3.8'
+
+name: listelog
+
+services:
+  worker-sttd-moss:
+    build: .
+
+    image: dkiyanov/listelog-worker-sttd-moss:latest
+    restart: unless-stopped
+
+    # Включаем поддержку GPU NVIDIA
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    volumes:
+      - ${HOST_AUDIO_DATA_DIR}:/data
+      - ${HOST_SESSIONS_DIR}:/results
+      - ${HOST_MODELS_DIR}:/models:ro
+
+    working_dir: /app
+    
+    entrypoint: /app/moss-worker
+
+    command:
+      - /models/${MOSS_TRANSCRIBE_MODEL_PATH}
+      - --root-dir
+      - /data
+      - --task-queue-dir
+      - sttd
+      - --in-proc-dir
+      - in_proc
+      - --complit-dir
+      - ${NEXT_WORK_TYPE}
+      - --result-dir
+      - /results
+      - --result-name
+      - _sttd.json
+      - --main-url
+      - ${MAIN_URL:-ws://host.docker.internal}:${PORT}/ws/worker
+      - --max-duration-kf
+      - ${MAX_DURATION_KF}
+      - --max-duration-add
+      - ${MAX_DURATION_ADD}
+      
+    # Инструкция Docker для разрешения адреса host.docker.internal (особенно важно для Linux)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      
