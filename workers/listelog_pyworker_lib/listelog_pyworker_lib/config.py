@@ -31,7 +31,7 @@ def get_worker_config_path() -> str:
     if env_value is not None:
         return "env"
     
-    config_path: str = f"./config_.json"
+    config_path: str = f"./config.json"
     if os.path.exists(config_path):
         return config_path
 
