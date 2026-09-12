@@ -17,4 +17,9 @@ cd workers/sttd-moss
 docker compose stop
 cd ../..
 
+echo "=== Stopping STT-WHISPER worker ==="
+cd workers/stt-whisper
+docker compose stop
+cd ../..
+
 echo "=== All Listelog containers stopped ==="

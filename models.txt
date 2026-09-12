@@ -1,0 +1,7 @@
+# данные для скачивания моделей
+# символ | отделяет имя файла - если нужно скачать один файл из репозитория модели
+# символ < если указан "путь куда скачивать" < "ид репозитория(|имя файла)"
+
+workers/spkemb/models/Wespeaker/wespeaker-voxceleb-redimnet2-B6-LM
+workers/sttd-moss/models/moss/mudler/moss-transcribe.cpp-gguf|moss-transcribe-q8_0.gguf
+workers/stt-whisper/models/faster-whisper/dvislobokov/faster-whisper-large-v3-turbo-russian

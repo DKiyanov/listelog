@@ -1,0 +1,8 @@
+{
+    "model_path" : "./models/faster-whisper/dvislobokov/faster-whisper-large-v3-turbo-russian",
+	"device" : "cuda",
+	"compute_type": "float16",
+	"language" : "ru",
+	"max_duration_kf" : 1.0,
+	"max_duration_add" : 0.0
+}

@@ -20,7 +20,14 @@ cd workers/sttd-moss
 docker compose up -d
 cd ../..
 
+echo "=== Starting STT-WHISPER worker ==="
+cd workers/stt-whisper
+docker compose up -d
+cd ../..
+
+
 echo "=== All services started ==="
 docker compose -f server/docker-compose.yml ps
 docker compose -f workers/spkemb/docker-compose.yml ps
 docker compose -f workers/sttd-moss/docker-compose.yml ps
+docker compose -f workers/stt-whisper/docker-compose.yml ps
