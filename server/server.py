@@ -394,8 +394,9 @@ async def set_speakers(
         if not src in condidats:
             condidats_file = _SESSIONS_DIR / str(sid) / f"condidats_{src}.json"
             with open(condidats_file, "r", encoding="utf-8") as f:
-                condidats_data: list[dict[str, Any]] = json.load(f)  
-            condidats[src] = condidats_data         
+                file_data: dict[str, Any] = json.load(f)  
+            condidats_data: list[dict[str, Any]] = file_data["speakers"]
+            condidats[src] = condidats_data
 
         condidats_data = condidats[src]
         condidat = next((condidat for condidat in condidats_data if condidat["spknum"] == spknum), None)

@@ -34,7 +34,7 @@ class SttProcessorWhisper(FileProcessor):
         self._main_config = main_config
         self._config = _SttConfig(config_path)
         self.work_types = "stt"
-        self.next_work_type = ""           
+        self.next_work_type = "spkemb"          
         self.sample_rate = 16000
 
         self.model: WhisperModel = WhisperModel(
@@ -56,35 +56,26 @@ class SttProcessorWhisper(FileProcessor):
         max_proc_duration_sec = (len(audio_data) / self.sample_rate) * self._config.max_duration_kf + self._config.max_duration_add
         task.start_processing(max_proc_duration_sec)
 
-        result = self._porcess_stt(audio_data)
-
-        task.save_sttd_result(result, self.spks)
+        self._porcess_stt(audio_data)
 
         return self.next_work_type
 
-    def _porcess_stt(self, audio_data: np.ndarray) -> list[RecognitionResult]:
+    def _porcess_stt(self, audio_data: np.ndarray) -> None:
         self._load_context()
-        text =self._get_text(audio_data, self.context)
+        segments, text = self._make_stt(audio_data, self.context)
         self._add_context(text)
         self._save_context()
-        audio_length_ms = len(audio_data) * 1000 // self.sample_rate
-        result = RecognitionResult(
-            self.chunk_info.tss, 
-            self.chunk_info.tss + audio_length_ms, 
-            self.spkid, 
-            text
-        )
-        return [result]
+        self._save_result(segments)
 
-    def _get_text(
+    def _make_stt(
         self, 
         audio_buffer: np.ndarray,
         context: str,
-    ) -> str:
+    ) -> tuple[list[SttdSegment], str]:
 
         # Проверка на пустой буфер во избежание ошибок декодера
         if audio_buffer is None or audio_buffer.size == 0:
-            return ""
+            return [], ""
 
         # Настройка параметров транскрибации
         kwargs: Dict[str, Any] = {
@@ -101,11 +92,22 @@ class SttProcessorWhisper(FileProcessor):
             **kwargs
         )
 
-        # Сборка текста из сегментов
-        text_segments: List[str] = [segment.text for segment in segments]
-        
-        # Объединяем сегменты и очищаем от лишних пробелов по краям
-        return "".join(text_segments).strip()
+        result: list[SttdSegment] = []
+        texts: List[str] = []
+
+        for seg in segments:
+            result.append(SttdSegment(
+                start= seg.start,
+                end=seg.end,
+                speaker="1",
+                text= seg.text
+            ))
+
+            texts.append(seg.text)
+
+        text = "".join(texts).strip()
+
+        return result, text
 
     def _load_context(self): 
         """Загружает данные из файла, ранее сохранённые с помощью save_for_next."""
@@ -143,3 +145,14 @@ class SttProcessorWhisper(FileProcessor):
         self.spks = [RecognitiontSpeaker(self.spkid, "", "", True, False)]   
 
         self.context_path = session_dir / "context.ctdt"
+
+        stt_results_dir = session_dir / "stt"
+        stt_results_dir.mkdir(exist_ok=True)
+
+        self.stt_result_path = str(stt_results_dir / f"{cid}_stt.json")
+
+    def _save_result(self, segments: list[SttdSegment]) -> None:
+        data_to_save: list[dict[str, Any]] = [asdict(s) for s in segments]        
+
+        with open(self.stt_result_path, "w", encoding="utf-8") as f:
+            json.dump(data_to_save, f, ensure_ascii=False, indent=4)          

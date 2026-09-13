@@ -99,7 +99,18 @@ class SpkembProcessorMoss(FileProcessor):
         speaker.is_bad  = speaker.max_seg_duration < 1.5
 
     def _process_spkemb(self, audio_data: np.ndarray) -> Tuple[list[RecognitionResult], List[RecognitiontSpeaker]]:        
+        result: List[RecognitionResult] = []       
+        spks: List[RecognitiontSpeaker] = []
+
         segments = self._load_sttd_segments()  
+
+        stt_ok: bool = False
+        
+        if self.stt_mode:
+            result, spks, stt_ok = self._get_stt_result(segments)
+            if stt_ok: 
+                return result, spks
+                    
         spkembs = self._get_speaker_emb(audio_data, segments)
 
         # сохраняем текущее состояние спикеров
@@ -136,7 +147,6 @@ class SpkembProcessorMoss(FileProcessor):
         prev_spk: SessionSpeaker | None = None
         spk_block_duration: float = 0.0
 
-        result: List[RecognitionResult] = []       
         for segment in segments:
             spknum = mspkmap[segment.speaker]
 
@@ -182,8 +192,11 @@ class SpkembProcessorMoss(FileProcessor):
 
         self._merge_speakers(self.speakers, self.spkorder)
 
+        if self.stt_mode:
+            result, spks, stt_ok = self._get_stt_result(segments) 
+            return result, spks
+        
         # заполняем список добавленых/изменённых спикеров
-        spks: List[RecognitiontSpeaker] = []
         for speaker in self.speakers:
             if speaker.spknum == -1: continue
 
@@ -377,7 +390,14 @@ class SpkembProcessorMoss(FileProcessor):
         user_dir: Path = Path(self._main_config.users_dir) / session_head.user
         self.usrspk_path = str(user_dir / f"speakers.json")
 
-        self.sttd_path   = str(self.session_dir / "sttd" / f"{self.cid}_sttd.json")
+        self.stt_mode = not self.chunk_info.diarize
+
+        sttd_path = self.session_dir / "sttd" / f"{self.cid}_sttd.json"
+
+        if self.stt_mode and not sttd_path.exists():
+            sttd_path = self.session_dir / "stt" / f"{self.cid}_stt.json"
+
+        self.sttd_path = str(sttd_path)
 
         self.sesspk_path = str(self.session_dir / f"condidats_{self.chunk_info.src}.json")
 
@@ -725,3 +745,86 @@ class SpkembProcessorMoss(FileProcessor):
                     # сегмент короткий и с обоих сторон один и тотже спикер
                     if prev_spknum == next_spknum and prev_spknum in main_spknum:
                         spk_u.ref_spknum = spkorder[spk_u.first_ssegi - 1]  
+
+    def _get_stt_result(self,
+        segments: List[SttdSegment],       
+    ) -> tuple[list[RecognitionResult], list[RecognitiontSpeaker], bool]:
+        result: list[RecognitionResult] = []
+        spks: list[RecognitiontSpeaker] = []
+
+        spkid = self._build_spkid(1)
+
+        for segment in segments:
+           result.append(RecognitionResult(
+                tss   = self.chunk_info.tss + round(segment.start * 1000),
+                tse   = self.chunk_info.tss + round(segment.end * 1000),
+                spkid = spkid,
+                text  = segment.text
+           )) 
+
+        title: str = ""
+        stt_lock: bool = False
+
+        stt_lock_spknum: int = -999 # спец номер для пометки блокирования
+
+        for spk in self.speakers:
+            if spk.spknum == stt_lock_spknum:
+                title = spk.title
+                stt_lock = True
+                break
+
+        if not stt_lock:
+            total_duration: float = 0.0
+            spkdr: dict[int, float] = {}
+            spkmax_duration: float = 0.0
+            selected_spknum: int = -1
+            selected_spk: SessionSpeaker | None = None
+
+            for spk in self.speakers:
+                total_duration += spk.duration
+                if not spk.is_good: continue
+
+                spknum = spk.spknum if spk.ref_spknum == -1 else spk.ref_spknum
+
+                duration = spkdr.get(spknum, 0.0) + spk.duration
+                spkdr[spknum] = duration
+
+                if spkmax_duration < duration:
+                    spkmax_duration = duration
+                    selected_spknum = spknum
+
+            if selected_spknum >= 0:
+                for spk in self.speakers:
+                    if spk.title == "": continue
+
+                    if spk.spknum == selected_spknum:
+                        selected_spk = spk
+                        title = spk.title
+                        break
+
+                    if spk.ref_spknum == selected_spknum:
+                        if title == "":
+                            title = spk.title
+                        elif title != spk.title:
+                            title = "*"
+
+                if (spkmax_duration >= 30.0 
+                and spkmax_duration >= total_duration * 0.8
+                and selected_spk is not None
+                ):
+                    # Блокируем последущий анализ
+                    selected_spk.spknum = stt_lock_spknum
+                    selected_spk.title  = title
+                    self.speakers.clear()
+                    self.speakers.append(selected_spk)
+                    stt_lock = True
+                    
+        spks.append(RecognitiontSpeaker(
+            spkid     = spkid,
+            title     = title,
+            ref_spkid = spkid,
+            is_good   = True,
+            is_bad    = False
+        ))
+
+        return result, spks, stt_lock

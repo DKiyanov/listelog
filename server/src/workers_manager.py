@@ -29,6 +29,7 @@ class WorkersManager:
 
                 if task_type == "ready":
                     worker.work_types = str(data.get("work_types")).lower().replace(" ", "").split(",")
+                    worker.task_key = None
                     await self.dispatcher.on_worker_ready(worker)
                     continue
 
@@ -40,6 +41,7 @@ class WorkersManager:
                     next_work_type = str(data.get("next")).lower()
 
                     await self.dispatcher.remove_task(sid, cid, work_type) # задание могло вернуться в очередь - удаляем его
+                    worker.task_key = None
 
                     if next_work_type == "":
                         next_work_type = "complete"

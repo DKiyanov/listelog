@@ -180,9 +180,9 @@ class ResultView:
         if not results:
             return
 
-        cid = results[0].cid
+        cids = list({result.cid for result in results})
 
-        self.result_list = [result for result in self.result_list if result.cid != cid]
+        self.result_list = [result for result in self.result_list if not result.cid in cids]
         
         self.result_list.extend(results)
         self.result_list.sort(key=lambda x: x.tss)

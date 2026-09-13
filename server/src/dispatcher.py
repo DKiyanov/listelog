@@ -13,6 +13,7 @@ class TaskDispatcher:
         self.config = config
         self.tasks_dir:str = config.audio_data_dir
         self.task_queue: List[Task] = []
+        self.workers: List[Worker] = []
         self.ready_workers: List[Worker] = []
         self._lock = asyncio.Lock()
 
@@ -37,6 +38,8 @@ class TaskDispatcher:
     async def on_worker_ready(self, worker: Worker):
         """Добавляет воркера под локом и запускает диспетчеризацию."""
         async with self._lock:
+            if not any(w.ws == worker.ws for w in self.workers):
+                self.ready_workers.append(worker) 
             if not any(w.ws == worker.ws for w in self.ready_workers):
                 self.ready_workers.append(worker)
                 print(f"воркер готов к приёму задачи {worker.work_types}")
@@ -46,15 +49,15 @@ class TaskDispatcher:
         """Удаляет воркера из списка готовых, если его WebSocket отключился."""
         async with self._lock:
             # Ищем воркера с совпадающим вебсокетом и удаляем его
-            worker = next(
-                (w for w in self.ready_workers if w.ws == ws),
-                None,
-            )
-            if not worker:
-                return
-            
-            print(f"воркер отмена готовности {worker.work_types}")
-            self.ready_workers.remove(worker)
+            index = next((i for i, w in enumerate(self.workers) if w.ws == ws), -1)
+            if index >= 0:
+                del self.workers[index]
+
+            index = next((i for i, w in enumerate(self.ready_workers) if w.ws == ws), -1)
+            if index >= 0:
+                worker = self.ready_workers[index]
+                print(f"воркер отмена готовности {worker.work_types}")
+                del self.ready_workers[index]
             
 
     def _dispatch_tasks_inside_lock(self):
@@ -63,30 +66,44 @@ class TaskDispatcher:
         Должен вызываться ТОЛЬКО внутри блока async with self._lock.
         """
         for task in list(self.task_queue):
-            suitable_worker = next(
-                (w for w in self.ready_workers if task.work_type in w.work_types),
-                None,
-            )
+            work_type = task.work_type
+
+            suitable_worker = next((w for w in self.ready_workers if work_type in w.work_types), None)
+
+            if not suitable_worker and work_type == "stt":
+                # Допустима отправка stt в sttd воркер
+                # вообще если нет зарегистрированных обработчиков для stt
+                if not any(worker for worker in self.workers if work_type in worker.work_types):
+                    work_type = "sttd"
+                    suitable_worker = next((w for w in self.ready_workers if work_type in w.work_types), None)
+                    if suitable_worker:
+                        self._move_stt_to_sttd(task)
 
             if suitable_worker:
                 # Воркер и задача забираются из списков ДО сетевого await
                 self.ready_workers.remove(suitable_worker)
                 self.task_queue.remove(task)
 
-                print(f"Планирование отправки задания воркеру {task.work_type} {task.file}")
+                print(f"Планирование отправки задания воркеру {work_type} {task.file}")
 
                 # Запускаем отправку в фоновом режиме, не удерживая лок
                 asyncio.create_task(
-                    self._send_task_to_worker(suitable_worker, task)
+                    self._send_task_to_worker(suitable_worker, task, work_type)
                 )
 
-    async def _send_task_to_worker(self, worker: Worker, task: Task):
+    def _move_stt_to_sttd(self, task: Task) -> None:
+        stt_file_path = Path(self.config.audio_data_dir) / "stt" / task.file
+        sttd_file_path = Path(self.config.audio_data_dir) / "sttd" / task.file
+        stt_file_path.rename(sttd_file_path)
+        
+    async def _send_task_to_worker(self, worker: Worker, task: Task, work_type: str):
         """Фоновое асинхронное выполнение отправки за пределами общего лока."""
         try:
-            print(f"Отправка задания воркеру {task.work_type} {task.file}")
+            print(f"Отправка задания воркеру {work_type} {task.file}")
             task_dict = asdict(task)
             task_dict["type"] = "task"
-            worker.task_key = get_task_key(task.sid, task.cid, task.work_type)
+            task_dict["work_type"] = work_type
+            worker.task_key = get_task_key(task.sid, task.cid, work_type)
             await worker.ws.send_json(task_dict)
         except Exception as e:
             print(f"Ошибка отправки задачи {task.work_type} {task.file} воркеру: {e}")
