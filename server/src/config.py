@@ -23,6 +23,7 @@ class Config:
     sessions_dir: str
     users_dir: str
     site_dir:str
+    llm_dir:str
 
     demo_login: str
 

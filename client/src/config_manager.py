@@ -14,8 +14,8 @@ class ConfigManager:
     # в main_config.json может быть указан token - если указан - используем его
     
     def __init__(self) -> None:
-        self._config_dir = Path.home() / f".{SERVICE_NAME}"
-        self._config_path: Path = self._config_dir/ "config.json" 
+        self.config_dir = Path.home() / f".{SERVICE_NAME}"
+        self._config_path: Path = self.config_dir/ "config.json" 
 
         self._main_config_path: Path = Path("./main_config.json")
 
@@ -87,8 +87,8 @@ class ConfigManager:
             "language": language
         }
         try:
-            if not self._config_dir .exists():
-                self._config_dir.mkdir(parents=True, exist_ok=True)
+            if not self.config_dir .exists():
+                self.config_dir.mkdir(parents=True, exist_ok=True)
 
             with open(self._config_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)

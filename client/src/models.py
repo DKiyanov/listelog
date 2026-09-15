@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Callable, List
 import numpy as np
 
-SERVICE_NAME = "dk_stt_recorder"
+SERVICE_NAME = "listelog"
 
 @dataclass
 class RawChunk:

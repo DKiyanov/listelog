@@ -55,7 +55,7 @@ class AudioRecorderApp:
         self.encoder: Encoder = Encoder(output_format="ogg")
         self.proc_queue: ProcQueue = ProcQueue(encoder=self.encoder, on_packet_ready=self._on_encoded_chunk)
         self.file_saver = FileSaver()
-        self.net_client = NetClient(self.on_send, self.on_results)
+        self.net_client = NetClient(self.on_send, self.on_results, self.config_manager.config_dir)
 
         set_theme_from_str(self.page, self.config_manager.theme)
 

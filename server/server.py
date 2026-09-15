@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any, Union
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
-from fastapi.security import HTTPBasic, HTTPBearer, HTTPBasicCredentials, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import HTMLResponse, FileResponse
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
@@ -16,6 +16,7 @@ import uvicorn
 
 from src.init import *
 from src.ws_routes import router as ws_router
+from src.llm import router as llm_router
 
 from src.user_authentication import user_authentication
 
@@ -33,7 +34,6 @@ async def lifespan(app: FastAPI):
 
 _app = FastAPI(title="Audio Processing API", version="1.0.0", lifespan=lifespan)
 _basic_security = HTTPBasic()
-_security = HTTPBearer()
 
 # --- конфигурация путей ---
 _AUDIO_DATA_DIR = Path(config.audio_data_dir).resolve()
@@ -42,24 +42,11 @@ _USERS_DIR= Path(config.users_dir).resolve()
 _SITE_DIR= Path(config.site_dir).resolve()
 
 _app.include_router(ws_router)
-
+_app.include_router(llm_router)
 
 def start_server():
     # Запуск web сервера
     uvicorn.run(_app, host="0.0.0.0", port=config.port)
-
-async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(_security)) -> str:
-    """Зависимость для проверки авторизации в эндпоинтах."""
-    token: str = credentials.credentials
-    user: Optional[str] = user_manager.get_user(token)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
-
 
 # --- Схемы Pydantic (Валидация данных) ---
 class OpenSessionRequest(BaseModel):

@@ -7,6 +7,9 @@ from src.client_manager import *
 from src.workers_manager import *
 from src.lost_task_controller import *
 
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
 config = Config()
 
 user_manager = UserManager(config)
@@ -16,6 +19,20 @@ dispatcher = TaskDispatcher(config)
 client_manager = ClientManager(config)
 workers_manager = WorkersManager(dispatcher, client_manager)
 lost_task_controller = LostTasksController(config.audio_data_dir, workers_manager, dispatcher)
+
+_security = HTTPBearer()
+
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(_security)) -> str:
+    """Зависимость для проверки авторизации в эндпоинтах."""
+    token: str = credentials.credentials
+    user: Optional[str] = user_manager.get_user(token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 def _init_directories(config: Config) -> None:
     for directory in [config.audio_data_dir, config.sessions_dir, config.users_dir]:

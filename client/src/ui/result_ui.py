@@ -9,6 +9,8 @@ from src.utils import show_confirm_dialog
 from src.ui.stt_sessions_sel_dlg_ui import *
 from src.translate import lcvt
 
+from src.ui.llm.llm_text_processor import *
+
 _RV: 'ResultView'
 
 class ResultView:
@@ -23,6 +25,7 @@ class ResultView:
         
         self.page = page
         self.net_client = net_client
+        self.llmtp: LlmTextProcessor | None = None
 
         self.result_list: List[ResultSegment] = []
         self.lv_items: dict[str, '_LvItem'] = {} # ItemKey -> _LvItem
@@ -170,7 +173,11 @@ class ResultView:
         asyncio.create_task( self.refresh_result(False))
 
     async def btn_llm_click(self):
-        print("LLM click")
+        if not self.llmtp:
+            self.llmtp = LlmTextProcessor(self.page, self.net_client)
+
+        text = self.get_text()
+        await self.llmtp.open(text)
 
     async def btn_copy_click(self):
         text = self.get_text()
