@@ -3,3 +3,4 @@ uvicorn
 ldap3
 pydantic
 websockets
+httpx

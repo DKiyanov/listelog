@@ -30,6 +30,11 @@ class LlmConnection:
     system_prompt: str
     temperature:float
 
+@dataclass
+class LlmProcessingResult:
+    llm_result: str
+    error: str
+
 # ---------- Pydantic-схемы для тела запросов ----------
 
 class SavePromptRequest(BaseModel):
@@ -174,16 +179,9 @@ async def get_llm_connections(
 
     return titles
 
-
-@router.get("/get-llm-connection", response_model=LlmConnection, status_code=status.HTTP_200_OK)
-async def get_llm_connection(
-    title: str,
-    user: str = Depends(verify_token),
-) -> LlmConnection:
-    """Возвращает соединение по названию."""
-
+def _get_connection(llmcon:str) -> LlmConnection | None:
     for item in _load_json_list(_global_connection_file()):
-        if item.get("title") == title:
+        if item.get("title") == llmcon:
             return LlmConnection(
                 title=item["title"],
                 is_personal=False,
@@ -192,7 +190,20 @@ async def get_llm_connection(
                 model=item.get("model", ""),
                 system_prompt=item.get("system_prompt", ""),
                 temperature=item.get("temperature", 0.7),
-            )
+            )    
+    
+    return None
+
+@router.get("/get-llm-connection", response_model=LlmConnection, status_code=status.HTTP_200_OK)
+async def get_llm_connection(
+    title: str,
+    user: str = Depends(verify_token),
+) -> LlmConnection:
+    """Возвращает соединение по названию."""
+
+    connection = _get_connection(title)
+    if connection:
+        return connection
 
     raise HTTPException(status_code=404, detail="Соединение не найдено")
 
@@ -244,20 +255,18 @@ async def del_llm_connection(
     _save_json(path, filtered)
     return {"status": "ok"}
 
-@router.get("/llm-processing", response_model=LlmConnection, status_code=status.HTTP_200_OK)
+@router.get("/llm-processing", response_model=LlmProcessingResult, status_code=status.HTTP_200_OK)
 async def llm_processing(
     text: str,
     prompt: str, 
     llmcon: str,
     user: str = Depends(verify_token),
-) -> tuple[str, str]:
+) -> LlmProcessingResult:
     """Возвращает результат обработки в LLM"""
 
-    path = _global_connection_file()
-    connections = _load_json_list(path)
-    connection = next((lc for lc in connections if lc.title == llmcon), None)
+    connection = _get_connection(llmcon)
     if not connection:
-        return "", f"соединение с LLM {llmcon} - не найдено"
+        return LlmProcessingResult("", f"соединение с LLM {llmcon} - не найдено")
 
     # Формируем заголовки авторизации
     headers = {
@@ -288,10 +297,10 @@ async def llm_processing(
             
             data = response.json()
             llm_result = data["choices"][0]["message"]["content"]
-            return llm_result, ""                
+            return LlmProcessingResult(llm_result, "")
         except httpx.HTTPStatusError as e:
             # Здесь можно обработать специфичные ошибки API (например, неверный ключ)
-            return "", f"Ошибка API ({e.response.status_code}): {e.response.text}"
+            return LlmProcessingResult("", f"Ошибка API ({e.response.status_code}): {e.response.text}")
         except httpx.RequestError as e:
             # Ошибки сети / таймауты
-            return "", f"Ошибка сети при запросе к LLM: {e}"    
+            return LlmProcessingResult("", f"Ошибка сети при запросе к LLM: {e}")    

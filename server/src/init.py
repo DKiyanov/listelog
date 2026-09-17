@@ -35,7 +35,7 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(_secu
     return user
 
 def _init_directories(config: Config) -> None:
-    for directory in [config.audio_data_dir, config.sessions_dir, config.users_dir]:
+    for directory in [config.audio_data_dir, config.sessions_dir, config.users_dir, config.llm_dir]:
         Path(directory).mkdir(parents=True, exist_ok=True)
 
     audio_data_dir = Path(config.audio_data_dir)

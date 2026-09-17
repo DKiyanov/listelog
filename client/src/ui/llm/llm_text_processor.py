@@ -43,11 +43,13 @@ class LlmTextProcessor:
 
         self.btn_run = ft.IconButton(
             icon=ft.Icons.PLAY_ARROW,
+            icon_color=ft.Colors.GREEN,
             tooltip=lcvt("0704|Выполнить"),
             on_click=self._on_run,
         )
         self.btn_transfer = ft.IconButton(
             icon=ft.Icons.ARROW_UPWARD,
+            icon_color=ft.Colors.BLUE,
             tooltip=lcvt("0705|Перенести результат в текст для обработки"),
             on_click=self._on_transfer,
             disabled=True,
@@ -115,9 +117,6 @@ class LlmTextProcessor:
         dialog.open =False
         self.page.update()
 
-    def is_advanced_user(self) -> bool:
-        return self.net.is_advanced_user
-
     # ----------------------------------------------------------- public API
     async def open(self, text: str):
         """Открывает диалог, инициализирует поля и списки."""
@@ -126,6 +125,8 @@ class LlmTextProcessor:
         self.tf_result.value = ""
         self.dd_prompt.value = None
         self.dd_llm.value = None
+
+        self.is_advanced_user = "llm_admin" in await self.net.get_user_roles()
 
         await self._reload_prompts()
         await self._reload_connections()
@@ -183,7 +184,7 @@ class LlmTextProcessor:
             return True
         if obj.is_personal:
             return True
-        return self.is_advanced_user()
+        return self.is_advanced_user
 
     # -------------------------------------------------------- main handlers
     def _on_prompt_selected(self, e):
@@ -207,7 +208,7 @@ class LlmTextProcessor:
         self.tf_text.value = self.tf_result.value
         self.page.update()
 
-    def _on_run(self, e):
+    async def _on_run(self, e):
         text = (self.tf_text.value or "").strip()
         prompt = (self.tf_prompt.value or "").strip()
         llm = self.dd_llm.value
@@ -225,19 +226,16 @@ class LlmTextProcessor:
         self.btn_run.disabled = True
         self.page.update()
 
-        async def worker():
-            try:
-                result, err = await self.net.llm_processing(text, prompt, llm)
-                if err:
-                    self._toast(err, error=True)
-                else:
-                    self.tf_result.value = result
-                    self._update_transfer_state()
-            finally:
-                self.btn_run.disabled = False
-                self.page.update()
-
-        threading.Thread(target=worker, daemon=True).start()
+        try:
+            result, err = await self.net.llm_processing(text, prompt, llm)
+            if err:
+                self._toast(err, error=True)
+            else:
+                self.tf_result.value = result
+                self._update_transfer_state()
+        finally:
+            self.btn_run.disabled = False
+            self.page.update()
 
     # ----------------------------------------------------------- Сохранить
     async def _on_save(self, e):
@@ -250,11 +248,11 @@ class LlmTextProcessor:
 
         p = self._get_prompt(title)
         # глобальный промпт, а пользователь не advanced -> создаём новый
-        if p and not p.is_personal and not self.is_advanced_user():
+        if p and not p.is_personal and not self.is_advanced_user:
             self._open_prompt_dialog()
             return
 
-        raw = strip_prefix(title)
+        raw = llm_strip_prefix(title)
         personal = p.is_personal if p else True
         err = await self.net.save_prompt(
             raw,
@@ -267,7 +265,7 @@ class LlmTextProcessor:
             return
 
         await self._reload_prompts(keep_value=False)
-        self.dd_prompt.value = apply_prefix(raw, personal)
+        self.dd_prompt.value = llm_apply_prefix(raw, personal)
         self.page.update()
 
     # -------------------------------------------------- Создать новый промпт
@@ -279,7 +277,7 @@ class LlmTextProcessor:
         personal_cb = ft.Checkbox(
             label=lcvt("0720|Личный промпт"),
             value=True,
-            disabled=not self.is_advanced_user(),
+            disabled=not self.is_advanced_user,
         )
         error_text = ft.Text("", color=ft.Colors.RED, visible=False)
 
@@ -295,7 +293,7 @@ class LlmTextProcessor:
                 return
 
             personal = personal_cb.value if personal_cb.value else False
-            personal = personal if self.is_advanced_user() else True
+            personal = personal if self.is_advanced_user else True
 
             err = await self.net.save_prompt(
                 raw,
@@ -311,7 +309,7 @@ class LlmTextProcessor:
 
             self._dialog_close(dlg)
             await self._reload_prompts(keep_value=False)
-            self.dd_prompt.value = apply_prefix(raw, personal)
+            self.dd_prompt.value = llm_apply_prefix(raw, personal)
             self.page.update()
 
         dlg = ft.AlertDialog(
@@ -387,7 +385,7 @@ class LlmTextProcessor:
     def _open_connection_dialog(self, existing: LlmConnection | None = None):
         title_f = ft.TextField(
             label=lcvt("0734|Название"),
-            value=strip_prefix(existing.title) if existing else "",
+            value=llm_strip_prefix(existing.title) if existing else "",
             autofocus=True,
             expand=True,
         )
@@ -428,7 +426,7 @@ class LlmTextProcessor:
         )
         personal_cb = ft.Checkbox(
             value=existing.is_personal if existing else True,
-            disabled=not self.is_advanced_user(),
+            disabled=not self.is_advanced_user,
         )
 
         personal_v = ft.Row(controls=[ft.Text(lcvt("0740|Личное соединение")), personal_cb])
@@ -447,7 +445,7 @@ class LlmTextProcessor:
                 return
 
             personal = personal_cb.value if personal_cb.value else False
-            personal = personal if self.is_advanced_user() else True
+            personal = personal if self.is_advanced_user else True
 
             temperature = temperature_s.value or 0
             
@@ -468,7 +466,7 @@ class LlmTextProcessor:
 
             self._dialog_close(dlg)
             await self._reload_connections(keep_value=False)
-            self.dd_llm.value = apply_prefix(raw, personal)
+            self.dd_llm.value = llm_apply_prefix(raw, personal)
             self.page.update()
 
         dlg = ft.AlertDialog(
@@ -500,13 +498,13 @@ class LlmTextProcessor:
         self._dialog_open(dlg)
 
     # ---------------------------------------------- Удалить соединение
-    def _on_delete_connection(self, e):
+    async def _on_delete_connection(self, e):
         title = self.dd_llm.value
         if not title:
             self._toast(lcvt("0746|Соединение не выбрано"), error=True)
             return
 
-        conn = self.net.get_connection(title)
+        conn = await self.net.get_connection(title)
         if not self._can_manage(conn):
             self._toast(lcvt("0747|Нет прав на удаление глобального соединения"), error=True)
             return

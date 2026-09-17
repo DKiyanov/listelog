@@ -25,6 +25,8 @@ class Config:
     site_dir:str
     llm_dir:str
 
+    stt_to_sttd_time_limit: float # время отсутствие воркера stt для отправкив в sttd, если < 0 - обработка stt через sttd отключена
+
     demo_login: str
 
     from_env: bool

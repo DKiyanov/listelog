@@ -3,6 +3,7 @@ from typing import List
 from dataclasses import asdict
 from fastapi import WebSocket
 from pathlib import Path
+import time
 
 from src.config import *
 from src.models import Worker, Task, get_task_key
@@ -16,6 +17,11 @@ class TaskDispatcher:
         self.workers: List[Worker] = []
         self.ready_workers: List[Worker] = []
         self._lock = asyncio.Lock()
+
+        self.stt_unready_time: float | None = None
+
+        self.work_type_stt = "stt"
+        self.work_type_sttd = "sttd"
 
     async def add_task(self, task: Task):
         """Добавляет задачу под локом и запускает диспетчеризацию."""
@@ -39,7 +45,7 @@ class TaskDispatcher:
         """Добавляет воркера под локом и запускает диспетчеризацию."""
         async with self._lock:
             if not any(w.ws == worker.ws for w in self.workers):
-                self.ready_workers.append(worker) 
+                self.workers.append(worker) 
             if not any(w.ws == worker.ws for w in self.ready_workers):
                 self.ready_workers.append(worker)
                 print(f"воркер готов к приёму задачи {worker.work_types}")
@@ -51,6 +57,10 @@ class TaskDispatcher:
             # Ищем воркера с совпадающим вебсокетом и удаляем его
             index = next((i for i, w in enumerate(self.workers) if w.ws == ws), -1)
             if index >= 0:
+                worker = self.ready_workers[index]
+                if self.work_type_stt in worker.work_types:
+                    self.stt_unready_time = time.perf_counter()
+
                 del self.workers[index]
 
             index = next((i for i, w in enumerate(self.ready_workers) if w.ws == ws), -1)
@@ -70,11 +80,17 @@ class TaskDispatcher:
 
             suitable_worker = next((w for w in self.ready_workers if work_type in w.work_types), None)
 
-            if not suitable_worker and work_type == "stt":
+            if (not suitable_worker and work_type == self.work_type_stt 
+            and self.config.stt_to_sttd_time_limit >= 0.0 # обработка stt через sttd разрешена
+            ):
                 # Допустима отправка stt в sttd воркер
                 # вообще если нет зарегистрированных обработчиков для stt
-                if not any(worker for worker in self.workers if work_type in worker.work_types):
-                    work_type = "sttd"
+                if (not any(self.work_type_stt in worker.work_types for worker in self.workers)
+                and (self.stt_unready_time is None # stt воркера ещё не было
+                    or (time.perf_counter() - self.stt_unready_time) >= self.config.stt_to_sttd_time_limit
+                    )
+                ):
+                    work_type = self.work_type_sttd
                     suitable_worker = next((w for w in self.ready_workers if work_type in w.work_types), None)
                     if suitable_worker:
                         self._move_stt_to_sttd(task)
@@ -92,8 +108,8 @@ class TaskDispatcher:
                 )
 
     def _move_stt_to_sttd(self, task: Task) -> None:
-        stt_file_path = Path(self.config.audio_data_dir) / "stt" / task.file
-        sttd_file_path = Path(self.config.audio_data_dir) / "sttd" / task.file
+        stt_file_path = Path(self.config.audio_data_dir) / self.work_type_stt / task.file
+        sttd_file_path = Path(self.config.audio_data_dir) / self.work_type_sttd / task.file
         stt_file_path.rename(sttd_file_path)
         
     async def _send_task_to_worker(self, worker: Worker, task: Task, work_type: str):

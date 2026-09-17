@@ -151,6 +151,28 @@ class UserManager:
                 
         return None
 
+    def get_user_roles(self, login: str) -> list[str]:
+        roles_file_path: Path = Path(self.config.users_dir) / "user_roles.json"
+
+        # Проверяем, существует ли файл, чтобы избежать ошибки
+        if not roles_file_path.exists():
+            return []
+
+        # Открываем и читаем JSON-файл
+        with open(roles_file_path, "r", encoding="utf-8") as f:
+            try:
+                users_data = json.load(f)
+            except json.JSONDecodeError:
+                return []  # Возвращаем пустой список, если JSON поврежден
+
+        # Ищем пользователя в списке словарей
+        for user in users_data:
+            if user.get("login") == login:
+                return user.get("roles", [])
+
+        # Если логин не найден, возвращаем пустой список
+        return []
+
 # if __name__ == "__main__":
 #     _config = Config()
 #     _user_manager = UserManager(_config)

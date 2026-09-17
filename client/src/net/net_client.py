@@ -10,6 +10,7 @@ import io
 from src.models import *
 from src.config_manager import *
 from src.ui.llm.llm_models import *
+from src.translate import *
 
 class NetClient:
     """Сетевой клиент для взаимодействия с сервером STT."""
@@ -29,8 +30,6 @@ class NetClient:
         self.base_url: str = ""
         self.username: str = ""
         self.token: str = ""
-
-        self.is_advanced_user: bool = False
 
         self.local_llm_connection_file = local_llm_dir / "personal_connection.json"
 
@@ -77,7 +76,7 @@ class NetClient:
                 token = keyring.get_password(SERVICE_NAME, username)
 
                 if not token:
-                    self.last_error = f"Токен для пользователя '{username}' не найден в хранилище."
+                    self.last_error = f"{lcvt('0801|Токен для пользователя')} '{username}' {lcvt('0802|не найден в локальном хранилище.')}"
                     return False
 
             url = f"{base_url.rstrip('/')}/check-token"
@@ -92,13 +91,13 @@ class NetClient:
             return True
 
         except keyring.errors.KeyringError as e:
-            self.last_error = f"Ошибка чтения из системного хранилища (keyring): {str(e)}"
+            self.last_error = f"{lcvt('0803|Ошибка чтения из системного хранилища (keyring):')} {str(e)}"
             return False
         except httpx.HTTPStatusError as e:
-            self.last_error = f"Ошибка проверки токена ({e.response.status_code}): {e.response.text}"
+            self.last_error = f"{lcvt('0804|Ошибка проверки токена')} ({e.response.status_code}): {e.response.text}"
             return False
         except httpx.RequestError as e:
-            self.last_error = f"Ошибка сети при проверке токена: {str(e)}"
+            self.last_error = f"{lcvt('0805|Ошибка сети при проверке токена:')} {str(e)}"
             return False
 
     def logup(self, base_url: str, username: str, password: str) -> bool:
@@ -129,16 +128,16 @@ class NetClient:
             return True
 
         except httpx.HTTPStatusError as e:
-            self.last_error = f"Ошибка сервера ({e.response.status_code}): {e.response.text}"
+            self.last_error = f"{lcvt('0806|Ошибка сервера')} ({e.response.status_code}): {e.response.text}"
             return False
         except httpx.RequestError as e:
-            self.last_error = f"Ошибка сети при запросе: {str(e)}"
+            self.last_error = f"{lcvt('0807|Ошибка сети при запросе:')} {str(e)}"
             return False
         except ValueError:
-            self.last_error = "Сервер вернул некорректный JSON."
+            self.last_error = lcvt("0808|Сервер вернул некорректный JSON.")
             return False
         except keyring.errors.KeyringError as e:
-            self.last_error = f"Ошибка системного хранилища (keyring): {str(e)}"
+            self.last_error = f"{lcvt('0809|Ошибка системного хранилища (keyring):')} {str(e)}"
             return False
 
     async def start_recording(self, title: str) -> None:
@@ -168,7 +167,7 @@ class NetClient:
         if self._client == None: return
 
         if not self.current_sid:
-            raise RuntimeError("Сессия не открыта. Сначала вызовите start_recording.")
+            raise RuntimeError(lcvt("0810|Сессия не открыта. Сначала вызовите start_recording."))
 
         url: str = "/upload-chunk"
         params: Dict[str, Any] = {
@@ -404,6 +403,17 @@ class NetClient:
         await self._stop_get_results()
         if self._client != None: await self._client.aclose()
 
+    async def get_user_roles(self) -> list[str]:
+        """Получает список ролей пользователя"""
+        if self._client == None: return []
+
+        response: httpx.Response = await self._client.get("/get-user-roles")
+        response.raise_for_status()
+        
+        result: list[str] = response.json()
+
+        return result
+
     # ---------- Prompts ----------
 
     async def get_prompts(self) -> list[Prompt]:
@@ -432,6 +442,8 @@ class NetClient:
         """Сохраняет промпт. Возвращает текст ошибки либо пустую строку."""
         if self._client == None: return ""
 
+        title = llm_apply_prefix(title, is_personal)
+
         payload = {
             "title": title,
             "text": text,
@@ -439,7 +451,7 @@ class NetClient:
             "is_personal": is_personal,
         }
         try:
-            response = await self._client.post("/save-prompt", json=payload)
+            response = await self._client.post("/llm/save-prompt", json=payload)
         except httpx.HTTPError as e:
             return f"Ошибка сети: {e}"
 
@@ -452,11 +464,11 @@ class NetClient:
         except ValueError:
             return response.text
 
-    async def del_prompt(self, title: str, is_personal: bool = False) -> None:
+    async def del_prompt(self, title: str) -> None:
         """Удаляет промпт по названию."""
         if self._client == None: return
 
-        params = {"title": title, "is_personal": is_personal}
+        params = {"title": title, "is_personal": llm_is_personal(title)}
         response: httpx.Response = await self._client.delete("/llm/del-prompt", params=params)
         response.raise_for_status()
 
@@ -501,7 +513,7 @@ class NetClient:
     async def get_connection(self, title: str) -> LlmConnection | None:
         """Получает соединение по названию."""
 
-        if is_personal(title):
+        if llm_is_personal(title):
             local_connections = self._read_local_connections()
             connection = next((lc for lc in local_connections if lc.title == title), None)
             if connection:
@@ -527,6 +539,7 @@ class NetClient:
         is_personal: bool,
     ) -> None:
         """Сохраняет соединение."""
+        title = llm_apply_prefix(title, is_personal)
 
         if is_personal:
             if not self.is_login_ok: return
@@ -557,13 +570,13 @@ class NetClient:
             "temperature": temperature,
             "is_personal": is_personal,
         }
-        response: httpx.Response = await self._client.post("/save-llm-connection", json=payload)
+        response: httpx.Response = await self._client.post("/llm/save-llm-connection", json=payload)
         response.raise_for_status()
 
     async def del_connection(self, title: str) -> None:
         """Удаляет соединение по названию."""
 
-        if is_personal(title):
+        if llm_is_personal(title):
             local_connections = self._read_local_connections()
             local_connections = [lc for lc in local_connections if lc.title != title]
             self._save_local_connections(local_connections)
@@ -572,7 +585,7 @@ class NetClient:
         if self._client == None: return
 
         params = {"title": title}
-        response: httpx.Response = await self._client.delete("/del-llm-connection", params=params)
+        response: httpx.Response = await self._client.delete("/llm/del-llm-connection", params=params)
         response.raise_for_status()
 
     async def _local_llm_processing(self, text: str, prompt: str, connection: LlmConnection) -> tuple[str, str]:
@@ -584,14 +597,16 @@ class NetClient:
             "Authorization": f"Bearer {connection.api_key}",
             "Content-Type": "application/json"
         }
-        
+
+        action_prompt = lcvt("0811|выполни [user-prompt] над данными находящимися в области [content] и верни результат обработки")
+        user_prompt = f"\n<content>\n{text}\n</content>\n<user-prompt>\n{prompt}</user-prompt>\n{action_prompt}"
+
         # Стандартный формат OpenAI-совместимых эндпоинтов
-        action_prompt = "выполни [user-prompt] над данными находящимися в области [content] и верни результат обработки"
         payload = {
             "model": connection.model,
             "messages": [
                 {"role": "system", "content": connection.system_prompt},
-                {"role": "user", "content": f"\n<content>\n{text}\n</content>\n<user-prompt>\n{prompt}</user-prompt>\n{action_prompt}"}
+                {"role": "user", "content": user_prompt}
             ],
             "temperature": connection.temperature
         }
@@ -611,20 +626,19 @@ class NetClient:
                 return llm_result, ""                
             except httpx.HTTPStatusError as e:
                 # Здесь можно обработать специфичные ошибки API (например, неверный ключ)
-                return "", f"Ошибка API ({e.response.status_code}): {e.response.text}"
+                return "", f"{lcvt('0812|Ошибка API')} ({e.response.status_code}): {e.response.text}"
             except httpx.RequestError as e:
                 # Ошибки сети / таймауты
-                return "", f"Ошибка сети при запросе к LLM: {e}"
+                return "", f"{lcvt('0813|Ошибка сети при запросе к LLM:')} {e}"
 
 
     async def llm_processing(self, text: str, prompt: str, llmcon: str) -> tuple[str, str]:
-        if is_personal(llmcon):
-            local_connections = self._read_local_connections()
-            connection = next((lc for lc in local_connections if lc.title == llmcon), None)
+        if llm_is_personal(llmcon):
+            connection = await self.get_connection(llmcon)
             if connection:
                 llm_result, error = await self._local_llm_processing(text, prompt, connection)
                 return llm_result, error
-            return "", "соедиение не найдено"
+            return "", lcvt("0814|соедиение не найдено")
             
         if self._client == None: return "", ""
 
@@ -639,7 +653,7 @@ class NetClient:
             return llm_result, error
         except httpx.HTTPStatusError as e:
             # Здесь можно обработать специфичные ошибки API (например, неверный ключ)
-            return "", f"Ошибка API ({e.response.status_code}): {e.response.text}"
+            return "", f"{lcvt('0815|Ошибка API')} ({e.response.status_code}): {e.response.text}"
         except httpx.RequestError as e:
             # Ошибки сети / таймауты
-            return "", f"Ошибка сети при запросе к LLM: {e}"
+            return "", f"{lcvt('0816|Ошибка сети при запросе к LLM:')} {e}"

@@ -10,6 +10,8 @@ from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.routing import APIRoute
+
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
 import uvicorn
@@ -444,5 +446,12 @@ async def download_file(file_path: str):
         media_type="application/octet-stream"
     )      
 
-if __name__ == "__main__":
+@_app.get("/get-user-roles", response_model=List[str], status_code=status.HTTP_200_OK)
+async def get_user_roles(
+    user: str = Depends(verify_token)
+) -> List[str]:
+    """Возвращает список ролей пользователя"""
+    return user_manager.get_user_roles(user)
+
+if __name__ == "__main__":       
     start_server()

@@ -11,8 +11,10 @@
     "sessions_dir": "../server_folders/sessions",
     "users_dir": "../server_folders/users",
     "site_dir": "../site",
+	"llm_dir": "../server_folders/llm",
 
     "verbose": true,
+	"stt_to_sttd_time_limit": -1,
     
     "demo_login": "TEST"
 }

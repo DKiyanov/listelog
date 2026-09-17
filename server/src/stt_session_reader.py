@@ -96,9 +96,14 @@ class SttSessionReader:
 
         for item in ses_speakers:
             spknum = int(item['spknum'])
-            if spknum < 0: continue
-
             ref_spknum = int(item["ref_spknum"])
+
+            if spknum == -999: # Значение зарезервировано для STT
+                spknum = 1
+                ref_spknum = 1
+
+            if spknum < 0: continue
+            
             ref_spkid = f"{src}/{ref_spknum}" if ref_spknum >= 0 else ""
 
             spks.append(
