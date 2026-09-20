@@ -3,5 +3,5 @@
 __pycache__/
 build/
 dist/
-inno_setap/
+inno_setup/
 *.json
