@@ -10,7 +10,6 @@ from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.routing import APIRoute
 
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field

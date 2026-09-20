@@ -1,5 +1,3 @@
-import threading
-
 import flet as ft
 
 from src.ui.llm.llm_models import *
@@ -25,8 +23,7 @@ class LlmTextProcessor:
         self.tf_text = ft.TextField(
             label=lcvt("0701|Текст для обработки"),
             multiline=True,
-            min_lines=5,
-            max_lines=10,
+            min_lines=15,
             expand=True,
         )
 
@@ -79,8 +76,7 @@ class LlmTextProcessor:
         self.tf_prompt = ft.TextField(
             label=lcvt("0713|Промпт"),
             multiline=True,
-            min_lines=5,
-            max_lines=10,
+            min_lines=15,
             expand=True,
         )
 
@@ -88,15 +84,15 @@ class LlmTextProcessor:
         self.tf_result = ft.TextField(
             label=lcvt("0714|Результат"),
             multiline=True,
-            min_lines=5,
-            max_lines=10,
+            min_lines=15,
             expand=True,
             on_change=self._on_result_change,
         )
 
         content = ft.Container(
-            width=760,
-            height=640,
+            width= ((self.page.width or 0) * 10),
+            expand=True,
+            padding=ft.Padding.only(left=6, right=6),
             content=ft.Column(
                 [self.tf_text, controls_row, self.tf_prompt, self.tf_result],
                 spacing=10,
@@ -104,16 +100,34 @@ class LlmTextProcessor:
             ),
         )
 
-        self.dialog = ft.AlertDialog(
-            modal=False,
-            title=ft.Text(lcvt("0715|Обработка текста с помощью LLM")),
-            content=content,
+        def close_dlg(_e=None):
+            self._dialog_close(self.dialog)
+
+        title_row = ft.Row(expand=True, 
+            controls=[
+                ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    icon_color=ft.Colors.BLUE,
+                    on_click=close_dlg
+                ),
+                ft.Text(lcvt("0715|Обработка текста с помощью LLM"), expand=True) 
+            ]
         )
 
-    def _dialog_open(self, dialog: ft.AlertDialog):
+        self.dialog = ft.AlertDialog(
+            modal=False,
+            title=title_row, 
+            title_padding=ft.Padding.only(bottom=4),
+            content=content,
+            content_padding=0, 
+            inset_padding=0,
+            shape=ft.RoundedRectangleBorder(radius=0),             
+        )
+
+    def _dialog_open(self, dialog: ft.DialogControl):
         self.page.show_dialog(dialog)
         
-    def _dialog_close(self, dialog: ft.AlertDialog):
+    def _dialog_close(self, dialog: ft.DialogControl):
         dialog.open =False
         self.page.update()
 
@@ -528,4 +542,4 @@ class LlmTextProcessor:
                 ft.TextButton(lcvt("0751|Удалить"), on_click=do_delete),
             ],
         )
-        self._dialog_open(confirm)
+        self._dialog_open(confirm)    
