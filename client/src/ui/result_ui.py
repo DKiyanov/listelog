@@ -603,14 +603,34 @@ class _LvItem:
             on_tap=on_tap
         )             
 
+        time = ft.Text(value=self._format_time(item.tss), size=16)
+
         edit_btn=ft.GestureDetector(
             content=ft.Icon(icon=ft.Icons.EDIT),
             on_tap=on_edit_click
         )        
 
         row.controls.clear()
+        row.controls.append(time)
         row.controls.append(text)
         row.controls.append(edit_btn)
+
+    def _format_time(self, time: int) -> str:
+        # Переводим миллисекунды в секунды
+        total_seconds = time // 1000
+        
+        seconds = total_seconds % 60
+        total_minutes = total_seconds // 60
+        minutes = total_minutes % 60
+        hours = total_minutes // 60
+        
+        # Форматируем строку в зависимости от наличия часов и минут
+        if hours > 0:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        elif minutes > 0:
+            return f"{minutes}:{seconds:02d}"
+        else:
+            return f"0:{seconds:02d}"        
 
     def _set_speaker_row_edit(self, item: ResultSegment, row: ft.Row):
         index = _RV.result_list.index(item)

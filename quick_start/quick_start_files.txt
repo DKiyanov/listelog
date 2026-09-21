@@ -1,3 +1,4 @@
+./quick_start_readme.md	>	listelog/readme.md
 ../download_models.py	>	listelog/download_models.py
 ../models.txt	>	listelog/models.txt
 ../prepare.sh	>	listelog/prepare.sh
