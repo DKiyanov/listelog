@@ -7,8 +7,6 @@
 ../server/.env	>	listelog/server/.env
 ../server/docker-compose.yml	>	listelog/server/docker-compose.yml
 ../site/index.html	>	listelog/site/index.html
-../site/assets/ListeLog_lnx	>	listelog/site/assets/ListeLog_lnx
-../site/assets/ListeLog_win.exe	>	listelog/site/assets/ListeLog_win.exe
 ../workers/spkemb/.env	>	listelog/workers/spkemb/.env
 ../workers/spkemb/docker-compose.yml	>	listelog/workers/spkemb/docker-compose.yml
 ../workers/spkemb/models/silero-vad/readme.md	>	listelog/workers/spkemb/models/silero-vad/readme.md

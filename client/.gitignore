@@ -1,7 +1,6 @@
 .venv/
+.linux_venv/
 .vscode/
 __pycache__/
-build/
-dist/
-inno_setup/
+xbuild/
 *.json

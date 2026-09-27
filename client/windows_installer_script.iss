@@ -34,7 +34,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only).
 ;PrivilegesRequired=lowest
-OutputDir=inno_setup
+OutputDir=xbuild\windows
 OutputBaseFilename=ListeLog_win
 SolidCompression=yes
 WizardStyle=modern dynamic
@@ -46,8 +46,8 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "dist\listelog\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\listelog\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "xbuild\windows\dist\listelog\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "xbuild\windows\dist\listelog\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
