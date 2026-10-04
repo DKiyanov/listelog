@@ -5,5 +5,3 @@
 *.bash text eol=lf
 site/assets/ListeLog_lnx.run filter=lfs diff=lfs merge=lfs -text
 site/assets/ListeLog_win.exe filter=lfs diff=lfs merge=lfs -text
-site/assets/*.run filter=lfs diff=lfs merge=lfs -text
-site/assets/*.exe filter=lfs diff=lfs merge=lfs -text

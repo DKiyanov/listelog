@@ -1,5 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
+
+venv_lib_dir = f"{sys.prefix}/lib/python{sys.version_info.major}.{sys.version_info.minor}"
 
 a = Analysis(
     ['client.py'],
@@ -10,7 +13,7 @@ a = Analysis(
         ('/usr/lib/x86_64-linux-gnu/libpulse.so.0', '.'),
         ('/usr/lib/x86_64-linux-gnu/libgstapp-1.0.so.0', '.'),
     ],
-    datas=[('assets', 'assets'), ('flet_client/linux', 'flet_client/linux')],
+    datas=[('assets', 'assets'), ('flet_client/linux', 'flet_client/linux'), (f'{venv_lib_dir}/site-packages/flet/controls/material/icons.json', 'flet/controls/material')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

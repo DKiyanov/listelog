@@ -1,11 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
 
 a = Analysis(
     ['client.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets', 'assets'), ('flet_client\windows', 'flet_client\windows')],
+    datas=[('assets', 'assets'), ('flet_client/windows', 'flet_client/windows'), (f'{sys.prefix}/Lib/site-packages/flet/controls/material/icons.json', 'flet/controls/material')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
