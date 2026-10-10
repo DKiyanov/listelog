@@ -170,6 +170,9 @@ class ResultView:
 
     def clear_results(self)->None:
         self.result_list.clear()
+        self.spks.clear()
+        self.spknmap.clear()
+        self.selected.clear()        
         asyncio.create_task( self.refresh_result(False))
 
     async def btn_llm_click(self):

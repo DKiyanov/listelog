@@ -9,6 +9,8 @@ listelog_QuickStart.zip
 
 ```
 
+Correct the values ​​for LDAP_DOMAIN and LDAP_SERVER in server/.env
+
 ### 2. Prepare the server
 
 Run:

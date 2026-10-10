@@ -18,7 +18,8 @@ class LanguageManager:
         if self._initialized:
             return
         # Путь к папке с языковыми файлами
-        self.directory: Path = Path("./assets/languages")
+        from src.utils import get_work_path
+        self.directory: Path = Path(get_work_path("assets/languages"))
         # Кэш переводов текущего языка: {код_текста: текст}
         self.translations: Dict[str, str] = {}
         self._initialized = True

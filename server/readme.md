@@ -16,3 +16,6 @@ pip install -r requirements.txt
 
 Запуск
 python server.py
+
+Локальный url запущеного сервера
+http://localhost:8732/

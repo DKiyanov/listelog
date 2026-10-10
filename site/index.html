@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Download the application client</title>
+	<link rel="icon" type="image/png" href="assets/icon.png">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -64,6 +65,46 @@
             background-color: #444444;
         }
     </style>
+	<script>
+		function getUrlPatch() {
+			// Получаем компоненты текущего URL страницы
+			const rawProtocol = window.location.protocol; // 'https:' или 'http:'
+			const hostname = window.location.hostname.replace(/\./g, ','); // заменяем точки на запятые
+			const port = window.location.port; // порт 
+
+			// Заменяем протокол на спецсимволы
+			let protocol = '';
+			if (rawProtocol === 'https:') {
+				protocol = '\$';
+			} else if (rawProtocol === 'http:') {
+				protocol = '%';
+			} else {
+				return ''
+			}
+
+			// Формируем суффикс из адреса
+			let urlPatch = `${protocol}${hostname}`;
+			if (port) {
+				urlPatch += `;${port}`;
+			}		
+			
+			return urlPatch;
+		}
+
+		window.addEventListener('DOMContentLoaded', () => {
+			const urlPatch = getUrlPatch();
+			if (urlPatch == '') return;
+			
+			const win_link = document.getElementById('win-download-link');
+			if (win_link) {
+				win_link.href = `/assets/ListeLog_win.exe?name=ListeLog_win${urlPatch}.exe`;
+			}
+			const lnx_link = document.getElementById('lnx-download-link');
+			if (lnx_link) {
+				lnx_link.href = `/assets/ListeLog_lnx.run?name=ListeLog_lnx${urlPatch}.run`;
+			}			
+		});
+	</script>	
 </head>
 <body>
 
@@ -73,8 +114,8 @@
         Capturing audio from microphones and audio outputs,<br> and converting speech to text with speaker diarization<br>all processing is performed on the server.
     </p>
     <div class="btn-group">
-        <a href="/assets/ListeLog_win.exe" class="btn windows">Download client for Windows</a>
-        <a href="/assets/ListeLog_lnx.run" class="btn linux">Download client for Linux</a>
+        <a href="/assets/ListeLog_win.exe" class="btn windows" id="win-download-link">Download client for Windows</a>
+        <a href="/assets/ListeLog_lnx.run" class="btn linux" id="lnx-download-link">Download client for Linux</a>
     </div>
 </div>
 

@@ -300,7 +300,7 @@ class AudioRecorderApp:
         await self.page.window.close()
 
     async def open_self_site(self):
-        url = f"{self.config_manager.base_url}/tokenin?token={self.config_manager.token}"
+        url = f"{self.config_manager.base_url}"
         await ft.UrlLauncher().launch_url(url)
 
     def show_settings_dialog(self):
@@ -360,7 +360,13 @@ class AudioRecorderApp:
         if not self.recording_source_list:
             return
 
-        asyncio.create_task(self.start_recording_ex(True,lcvt("0015|Статус: загрузка файла на сервер")))
+        if self.title.value != "":
+            title = self.title.value
+        else:
+            file_path = self.file_upload_row.file_path_input.value
+            title = Path(file_path).name
+        
+        asyncio.create_task(self.start_recording_ex(True, lcvt("0015|Статус: загрузка файла на сервер"), title))
       
 
     def _on_file_finish(self) -> None:
@@ -391,6 +397,10 @@ class AudioRecorderApp:
             show_toast(self.page, f"{lcvt('0017|Выбирите хотя бы одну из возможностей:')}\n{self.chk_srver_stt.label}\n{self.chk_record_to_file.label}")
             return
 
+        if self.title.value == "":
+            show_toast(self.page, f"{lcvt('0024|Введите описание:')}\n{self.chk_srver_stt.label}\n{self.chk_record_to_file.label}")
+            return            
+
         self.recording_source_list.clear()
 
         for dev_row in self.dev_rows:
@@ -400,7 +410,7 @@ class AudioRecorderApp:
         if not self.recording_source_list:
             return
 
-        await self.start_recording_ex(self.chk_srver_stt.value,lcvt("0018|Статус: ЗАПИСЬ..."))
+        await self.start_recording_ex(self.chk_srver_stt.value,lcvt("0018|Статус: ЗАПИСЬ..."), self.title.value)
 
         for dev_row in self.dev_rows:
             dev_row.start_recording()        
@@ -408,11 +418,13 @@ class AudioRecorderApp:
         if self.chk_record_to_file.value:
             await self.file_saver.start_recording(self._get_record_file_path(), self.recording_source_ids, SAMPLE_RATE)        
 
-    async def start_recording_ex(self, net: Optional[bool], status: str) -> None:
+    async def start_recording_ex(self, net: Optional[bool], status: str, title: str) -> None:
+        self.result_view.clear_results()
+
         self.recording_source_ids = {source.source_id for source in self.recording_source_list}
 
         if net:
-            await self.net_client.start_recording(self.title.value)
+            await self.net_client.start_recording(title)
 
         for dev_row in self.dev_rows:
             dev_row.set_disabled(True)

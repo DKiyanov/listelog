@@ -136,17 +136,58 @@ EOF
 chmod +x "$DESKTOP_DIR/listelog.desktop"
 
 # Иконка (если есть в сборке)
-if [ -f "$TARGET_DIR/icon.png" ]; then
+if [ -f "$TARGET_DIR/_internal/assets/icon.png" ]; then
     mkdir -p "$ICON_DIR"
-    cp "$TARGET_DIR/icon.png" "$ICON_DIR/listelog.png"
+    cp "$TARGET_DIR/_internal/assets/icon.png" "$ICON_DIR/listelog.png"
 fi
 
 # Обновление кэша иконок/десктопа (если доступно)
 command -v update-desktop-database &>/dev/null && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
 command -v gtk-update-icon-cache &>/dev/null && gtk-update-icon-cache -f -t "$ICON_DIR/.." 2>/dev/null || true
 
+# Разрешаем запуск ярлыка в современных DE (например, Ubuntu/GNOME требует доверия к файлу)
+if command -v gio &> /dev/null; then
+    gio set "$DESKTOP_DIR/listelog.desktop" metadata::trusted true
+fi
+
 echo "Установлено в: $TARGET_DIR"
 echo "Симлинк: $BIN_DIR/listelog"
+
+# === создание main_config.json ===
+# содержащий url к серверу полученный из имени файла дистрибутива
+echo
+echo "=== создание main_config.json ==="
+
+# $0 содержит полный путь к запущенному .run файлу. Получаем только имя файла:
+FILENAME=$(basename "$0")
+
+# Проверяем наличие управляющих символов и формируем протокол
+if [[ "$FILENAME" == *%* ]]; then
+    # Вырезаем всё от % до .run
+    EXTRACTED=$(echo "$FILENAME" | sed -e 's/.*%//' -e 's/\.run.*//')
+    PROTOCOL="http://"
+elif [[ "$FILENAME" == *\$* ]]; then
+    # Вырезаем всё от $ до .run (экранируем $)
+    EXTRACTED=$(echo "$FILENAME" | sed -e 's/.*\///' -e 's/.*\$//' -e 's/\.run.*//')
+    PROTOCOL="https://"
+fi
+
+if [[ -n "$PROTOCOL" ]]; then
+    # Заменяем запятые на точки, а точки с запятой на двоеточия
+    CLEANED_URL=$(echo "$EXTRACTED" | tr ',' '.' | tr ';' ':')
+    BASE_URL="${PROTOCOL}${CLEANED_URL}"
+
+    # Создаем main_config.json в текущем каталоге (куда распаковался архив)
+    cat <<EOF > main_config.json
+    {
+      "base_url": "$BASE_URL"
+    }
+    EOF
+
+    echo "Конфигурация успешно создана. Сервер: $BASE_URL"
+else
+    echo "Имя файла не содержит url сервера"
+fi
 
 # === Проверка ffmpeg ===
 echo
@@ -181,6 +222,9 @@ fi
 
 echo
 echo "=== Установка завершена ==="
+
+echo "=== Запуск приложения ==="
+"$INSTALL_DIR/listelog" &
 INSTALL_EOF
 
 chmod +x "$PKG_STAGE/install.sh"

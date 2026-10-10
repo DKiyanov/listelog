@@ -418,7 +418,7 @@ async def read_root():
           
 # Эндпоинт для скачивания файлов: клиент для Windows/Linux
 @_app.get("/assets/{file_path:path}")
-async def download_file(file_path: str):
+async def download_file(file_path: str, name:str|None = None):
     # Safe path resolution: объединяем пути и переводим в абсолютный вид
     assets_dir = _SITE_DIR / "assets"
 
@@ -437,11 +437,19 @@ async def download_file(file_path: str):
             status_code=status.HTTP_404_NOT_FOUND, 
             detail="Файл не найден"
         )
+        
+    if safe_path.name == "icon.png":
+        return FileResponse(
+            path=safe_path, 
+            filename=safe_path.name
+        )         
+        
+    download_name = name if name else safe_path.name
 
     # Возвращаем файл. Параметр filename заставит браузер именно скачивать файл
     return FileResponse(
         path=safe_path, 
-        filename=safe_path.name, 
+        filename=download_name, 
         media_type="application/octet-stream"
     )      
 

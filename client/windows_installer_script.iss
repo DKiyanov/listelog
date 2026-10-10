@@ -58,6 +58,89 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+// Извлекает URL сервера из имени файла дистрибутива
+function GetServerUrlFromFileName(): String;
+var
+  ExePath: String;
+  ExeName: String;
+  Protocol: String;
+  UrlPart: String;
+  PosSign: Integer;
+  PosDot: Integer;
+begin
+  Result := '';
+  
+  // Получаем полное имя запущенного .exe файла
+  ExePath := ExpandConstant('{srcexe}');
+  ExeName := ExtractFileName(ExePath);
+
+  // Ищем начальный символ (% или $)
+  PosSign := Pos('%', ExeName);
+  if PosSign > 0 then
+  begin
+    Protocol := 'http://';
+  end
+  else
+  begin
+    PosSign := Pos('$', ExeName);
+    if PosSign > 0 then
+      Protocol := 'https://'
+    else
+      Exit; // Если символов # или $ нет, выходим
+  end;
+
+  // Ищем точку после спецсимвола, которая отсекает расширение .exe
+  // Начинаем поиск с позиции спецсимвола
+  PosDot := Pos('.', Copy(ExeName, PosSign, Length(ExeName)));
+  if PosDot > 0 then
+  begin
+    // Вычисляем реальную позицию точки в исходной строке
+    PosDot := PosSign + PosDot - 1;
+    
+    // Вырезаем фрагмент между значком (#/$) и точкой (.)
+    UrlPart := Copy(ExeName, PosSign + 1, PosDot - PosSign - 1);
+    
+    // Заменяем запятые на точки, а точки с запятой на двоеточия
+    StringChangeEx(UrlPart, ',', '.', True);
+    StringChangeEx(UrlPart, ';', ':', True);
+    
+    // Собираем итоговый URL
+    Result := Protocol + UrlPart;
+  end;
+end;
+
+// Сохраянет URL сервера из имени файла дистрибутива в main_ini.json
+procedure SaveMainIni();
+var
+  ServerUrl: String;
+  JsonContent: String;
+  FilePath: String;
+  FileLines: TArrayOfString;
+begin
+  ServerUrl := GetServerUrlFromFileName();
+    
+  if ServerUrl = '' then
+  begin
+    Log('Не удалось извлечь адрес сервера из имени файла: ' + ExtractFileName(ExpandConstant('{srcexe}')));
+	Exit;
+  end;
+  
+  // Формируем путь к файлу main_ini.json в целевой папке установки
+  FilePath := ExpandConstant('{app}\main_config.json');
+      
+  // Формируем структуру JSON (экранируем обратные слэши, если они будут)
+  JsonContent := '{' + #13#10 + '  "base_url":"' + ServerUrl + '"' + #13#10 + '}';
+      
+  // Записываем контент в файл
+  SetArrayLength(FileLines, 1);
+  FileLines[0] := JsonContent;
+      
+  if SaveStringsToFile(FilePath, FileLines, False) then
+    Log('Файл main_config.json успешно создан с URL: ' + ServerUrl)
+  else
+    Log('Ошибка при сохранении файла main_config.json');
+end;
+
 // Функция для проверки наличия ffmpeg в системе
 function IsFFmpegInstalled(): Boolean;
 var
@@ -91,5 +174,11 @@ begin
         mbInformation, MB_OK, MB_OK
       );
     end;
+  end;
+  
+  // После завершения копирования файлов
+  if CurStep = ssPostInstall then    
+  begin
+    SaveMainIni();
   end;
 end;
