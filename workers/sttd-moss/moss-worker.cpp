@@ -18,6 +18,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 #include <cmath>
@@ -34,6 +35,7 @@ static std::atomic<bool> g_stop{false};
 
 struct Options {
     std::string model;
+	std::string prompt;
     fs::path root_dir;
     std::string task_queue_dir;
     std::string in_proc_dir;
@@ -43,6 +45,7 @@ struct Options {
     std::string main_url;
     double max_duration_kf = 0.0;
     double max_duration_add = 0.0;
+	int context_length = 0;
     int max_new = -1;
 };
 
@@ -373,10 +376,15 @@ static bool parse_args(int argc, char **argv, Options &opt) {
         } else if (arg == "--main-url") {
             if (!value(i, arg, opt.main_url))
                 return false;
+        } else if (arg == "--prompt") {
+            if (!value(i, arg, opt.prompt))
+                return false;			
         } else if (arg == "--max-duration-kf" && i + 1 < argc) {
-            opt.max_duration_kf = std::stod(argv[++i]);            
+            opt.max_duration_kf = std::stod(argv[++i]);
         } else if (arg == "--max-duration-add" && i + 1 < argc) {
-            opt.max_duration_add = std::stod(argv[++i]);              
+            opt.max_duration_add = std::stod(argv[++i]);			
+        } else if (arg == "--context-length" && i + 1 < argc) {
+            opt.context_length = std::stoi(argv[++i]);			
         } else if (arg == "--max-new" && i + 1 < argc) {
             opt.max_new = std::stoi(argv[++i]);
         } else {
@@ -555,24 +563,154 @@ static bool write_result_atomic(const fs::path &result,
     return true;
 }
 
+std::string to_context_text(const std::vector<mt::SubtitleSegment>& segments) {
+    if (segments.empty()) return "";
+    std::string out = "";
+	std::string prev_speaker = "";
+    for (size_t i = 0; i < segments.size(); ++i) {
+        const mt::SubtitleSegment& s = segments[i];
+		if (!out.empty()) {
+			out += "\n";
+		}
+		if (s.speaker == prev_speaker) {
+			out += s.text;
+		} else {
+			out += ">> " + s.text;
+			prev_speaker = s.speaker;
+		}
+        
+    }
+    return out;
+}
+
+static std::string limit_words(const std::string &text, int max_word_count) {
+    if (max_word_count <= 0 || text.empty()) {
+        return "";
+    }
+
+    std::string_view sv(text);
+    size_t i = sv.size();
+    int words_found = 0;
+    bool in_word = false;
+
+    // Идем с конца строки к началу
+    while (i > 0) {
+        char ch = sv[i - 1];
+        
+        // Проверяем, является ли символ пробельным
+        bool is_space = (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r');
+
+        if (!is_space) {
+            if (!in_word) {
+                in_word = true;
+                words_found++;
+                // Если набрали нужное количество слов, останавливаемся
+                if (words_found > max_word_count) {
+                    break;
+                }
+            }
+        } else {
+            in_word = false;
+        }
+        
+        i--;
+    }
+
+    // Пропускаем возможные пробелы перед первым взятым словом
+    while (i < sv.size()) {
+        char ch = sv[i];
+        if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+            i++;
+        } else {
+            break;
+        }
+    }
+
+    // Возвращаем подстроку от найденного индекса до конца
+    return std::string(sv.substr(i));
+}
+
+static bool save_new_context(
+    const std::string &old_context, 
+	const std::vector<mt::SubtitleSegment>& segments, 
+	int context_length,
+	const fs::path &context_file) {
+		
+	if (context_length == 0) return false;
+		
+	//std::cout << "context: " << old_context << std::endl;
+	
+	std::string text = to_context_text(segments);
+	if (text.empty()) {
+		std::cout << "result: " << "==empty==" << std::endl;
+		return false;
+	}
+	
+	std::cout << "result: " << text << std::endl;
+	
+	std::string new_context = "";
+	
+	if (old_context.empty()) { 
+		new_context = limit_words("?"+ text, context_length);
+	} else {
+		new_context = limit_words(old_context +"\n?"+ text, context_length);
+	}
+	
+	std::ofstream out_file(context_file, std::ios::out | std::ios::binary);
+	if (out_file) {
+		out_file << new_context;
+		return true;
+	}
+	
+	return false;
+}
+
+void replace_all_newlines(std::string& str) {
+    std::string to_find = "\\n";   // Ищем подстроку из двух символов: '\' и 'n'
+    std::string to_replace = "\n"; // Заменяем на один символ переноса строки
+    
+    size_t pos = str.find(to_find);
+    while (pos != std::string::npos) {
+        // Заменяем 2 найденных символа ("\n") на 1 новый ('\n')
+        str.replace(pos, to_find.length(), to_replace);
+        // Сдвигаем позицию поиска вперед, чтобы избежать бесконечного цикла
+        pos = str.find(to_find, pos + to_replace.length());
+    }
+}
+
 static bool process_file(
     moss_transcribe_ctx *ctx,
+	const std::string prompt,
     const fs::path &input,
     const mt::Audio &audio_data,
+	const std::string &in_context,
+	int context_length,
+	const fs::path &result_context,
     const fs::path &result,
     int max_new) {
 
-    std::cout << "Processing: " << input.filename().string()
-              << std::endl;
+    std::cout << "Processing: " << input.filename().string() << std::endl;
 
     auto start = std::chrono::steady_clock::now();
+	
+    std::string new_prompt = prompt;
 
+    const std::string target = "[context]";
+    size_t pos = new_prompt.find(target);
+
+    if (pos != std::string::npos) {
+        new_prompt.replace(pos, target.length(), in_context);
+    }
+
+    replace_all_newlines(new_prompt);
+	
     char *raw =
-		moss_transcribe_capi_transcribe_pcm(
+		moss_transcribe_capi_transcribe_pcm_ex(
 			ctx,
 			audio_data.samples.data(),
 			static_cast<int>(audio_data.samples.size()), 
 			audio_data.sample_rate,
+			new_prompt,
 			max_new);
 
     if (!raw) {
@@ -586,10 +724,7 @@ static bool process_file(
     std::string transcript(raw);
     moss_transcribe_capi_free_string(raw);
 
-    auto segments =
-        mt::subtitle_segments_from_transcript(
-            transcript,
-            /*postprocess=*/false);
+    auto segments = mt::subtitle_segments_from_transcript(transcript, /*postprocess=*/false);
 
     std::string json_text = mt::to_json(segments);
 
@@ -599,10 +734,11 @@ static bool process_file(
             << result << std::endl;
         return false;
     }
+	
+	save_new_context(in_context, segments, context_length, result_context);
 
     auto end = std::chrono::steady_clock::now();
-    double seconds =
-        std::chrono::duration<double>(end - start).count();
+    double seconds = std::chrono::duration<double>(end - start).count();
 
     std::cout << "Completed: "
               << input.filename().string()
@@ -760,6 +896,42 @@ static bool parse_task(const std::string &message,
     return true;
 }
 
+static std::string prepare_context(
+    const fs::path &self_context_file,
+    const fs::path &context_file
+) {
+    // 1. Если self_context_file существует -> читаем и возвращаем
+    if (fs::exists(self_context_file) && fs::is_regular_file(self_context_file)) {
+        std::ifstream file(self_context_file, std::ios::in | std::ios::binary);
+        if (file) {
+            std::stringstream buffer;
+            buffer << file.rdbuf();
+            return buffer.str();
+        }
+    }
+
+    // 2. Иначе, если существует context_file -> читаем, сохраняем в self_context_file и возвращаем
+    if (fs::exists(context_file) && fs::is_regular_file(context_file)) {
+        std::ifstream file(context_file, std::ios::in | std::ios::binary);
+        if (file) {
+            std::stringstream buffer;
+            buffer << file.rdbuf();
+            std::string content = buffer.str();
+
+            // Сохраняем в self_context_file
+            std::ofstream out_file(self_context_file, std::ios::out | std::ios::binary);
+            if (out_file) {
+                out_file << content;
+            }
+
+            return content;
+        }
+    }
+
+    // 3. Иначе возвращаем пустую строку
+    return "";
+}
+
 static bool process_task(
     moss_transcribe_ctx *ctx,
     const Options &opt,
@@ -776,17 +948,26 @@ static bool process_task(
     fs::path complete_file = complete_dir / file;
 
     fs::path result_file;
+	fs::path target_result_dir;
+	fs::path self_context_file;
+	
+	const std::string context_file_name = "context.txt";
 
     if (!work_type.empty() && !sid.empty() && !cid.empty()) {
-        fs::path target_result_dir = result_dir / sid / work_type;
+        target_result_dir = result_dir / sid / work_type;
         fs::create_directories(target_result_dir);
 
+		self_context_file = target_result_dir / (cid + "_" + context_file_name);
         result_file = target_result_dir / (cid + opt.result_name);
     } else {
-        result_file =
-            result_dir /
-            (fs::path(file).stem().string() + opt.result_name);
+		target_result_dir = result_dir;
+		self_context_file = target_result_dir / (cid + "_" + context_file_name);
+        result_file = target_result_dir / (fs::path(file).stem().string() + opt.result_name);
     }
+	
+	fs::path result_context_file = target_result_dir / context_file_name;
+	
+	const std::string context = prepare_context(self_context_file, result_context_file);
 
 	// Создаем структуру для хранения аудиоданных
 	mt::Audio audio_data;		
@@ -833,7 +1014,7 @@ static bool process_task(
         return false;
     }
 
-    if (!process_file(ctx, in_proc_file, audio_data, result_file, opt.max_new)) {
+    if (!process_file(ctx, opt.prompt, in_proc_file, audio_data, context, opt.context_length, result_context_file, result_file, opt.max_new)) {
         std::cerr
             << "Task failed. File remains in: "
             << in_proc_file

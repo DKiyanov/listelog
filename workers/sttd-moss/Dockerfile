@@ -23,6 +23,9 @@ RUN git clone --depth 1 --recurse-submodules \
 COPY moss-batch.cpp /src/moss-batch.cpp
 COPY moss-worker.cpp /src/moss-worker.cpp
 
+# замеяем некоторые файлы mudler/moss-transcribe.cpp на слегка исправленые
+COPY patch/ /src
+
 RUN cat << 'EOF' >> CMakeLists.txt
 
 find_package(PkgConfig REQUIRED)

@@ -29,6 +29,10 @@ services:
 
     command:
       - /models/${MOSS_TRANSCRIBE_MODEL_PATH}
+      - --prompt
+      - ${PROMPT}
+      - --context-length
+      - ${CONTEXT_LENGTH}
       - --root-dir
       - /data
       - --task-queue-dir
