@@ -14,7 +14,7 @@ class ConfigManager:
     # в main_config.json может быть указан token - если указан - используем его
     
     def __init__(self) -> None:
-        self.config_dir = Path.home() / f".{SERVICE_NAME}"
+        self.config_dir = config_dir
         self._config_path: Path = self.config_dir/ "config.json" 
 
         self._main_config_path: Path = Path("./main_config.json")

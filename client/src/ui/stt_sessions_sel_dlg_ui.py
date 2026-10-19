@@ -1,4 +1,5 @@
-from typing import List, Callable
+import asyncio
+from typing import List
 import flet as ft
 from datetime import datetime
 import locale
@@ -6,7 +7,12 @@ import locale
 from src.models import *
 from src.translate import lcvt
 
-def select_stt_session(page: ft.Page, ses_list: List[SttSession], on_select: OnSelectSttSession):
+async def select_stt_session(page: ft.Page, ses_list: List[SttSession]) -> SttSession | None:
+    if page.window.width is None: return
+
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+
     locale.setlocale(locale.LC_TIME, "")
     date_time_width: int = 150
 
@@ -17,10 +23,10 @@ def select_stt_session(page: ft.Page, ses_list: List[SttSession], on_select: OnS
 
     # Обработчик выбора строки
     def on_row_select(session: SttSession):
+        if not future.done():
+            future.set_result(session)          
         dialog.open = False
         page.update()
-        on_select(session)
-
     
     header_row = ft.Container(
         content=ft.Row(
@@ -66,20 +72,23 @@ def select_stt_session(page: ft.Page, ses_list: List[SttSession], on_select: OnS
         tight=True,
     )
 
-
-    if page.window.width is None: return
-
     content_container = ft.Container(
         content= content_layout,
         width= page.window.width // 2
     )
+
+    def _handle_cancel(self) -> None:
+        if not future.done():
+            future.set_result(None)        
+        dialog.open =False
+        page.update()    
 
     # Настраиваем диалоговое окно
     dialog = ft.AlertDialog(
         title=ft.Text(lcvt("0503|Выберите запись")),
         content=content_container,
         actions=[
-            ft.TextButton(lcvt("0504|Отмена"), on_click=lambda e: setattr(dialog, "open", False) or page.update())
+            ft.Button(lcvt("0504|Отмена"), icon=ft.Icons.CANCEL, on_click=_handle_cancel)
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
@@ -88,3 +97,5 @@ def select_stt_session(page: ft.Page, ses_list: List[SttSession], on_select: OnS
     page.overlay.append(dialog)
     dialog.open = True
     page.update()
+
+    return await future

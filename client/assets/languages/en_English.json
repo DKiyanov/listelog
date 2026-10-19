@@ -151,5 +151,11 @@
 {"code":"0813","text":"Network error during LLM request:"},
 {"code":"0814","text":"connection not found"},
 {"code":"0815","text":"API error"},
-{"code":"0816","text":"Network error during LLM request:"}
+{"code":"0816","text":"Network error during LLM request:"},
+{"code":"0008","text":"Sessions saved on the server"},
+{"code":"0024","text":"Enter description:"},
+{"code":"0025","text":"Start a new recording"},
+{"code":"0026","text":"Description"},
+{"code":"0417","text":"Log in"},
+{"code":"0410","text":"Save"}
 ]

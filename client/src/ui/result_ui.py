@@ -17,7 +17,8 @@ class ResultView:
     def __init__(
         self, 
         page: ft.Page,
-        net_client: NetClient
+        net_client: NetClient,
+        on_select_session: OnSelectSttSession
     ) -> None:
         
         global _RV
@@ -25,6 +26,7 @@ class ResultView:
         
         self.page = page
         self.net_client = net_client
+        self.on_select_session = on_select_session
         self.llmtp: LlmTextProcessor | None = None
 
         self.result_list: List[ResultSegment] = []
@@ -156,17 +158,16 @@ class ResultView:
 
     async def btn_stts_click(self):
         stts_list = await self.net_client.get_sessions()
-        select_stt_session(self.page, stts_list, self.set_stts)
+        stts = await select_stt_session(self.page, stts_list)
+        if stts is None: return
     
-    def set_stts(self, stts: SttSession)->None:
-        asyncio.create_task(self.set_stts_async(stts))
-
-    async def set_stts_async(self, stts: SttSession)->None:
         self.net_client.current_sid = stts.sid
         stts_results, stts_spks = await self.net_client.get_session_data(stts.sid)
 
         self.result_list.clear()
         await self.add_results(stts_results, stts_spks)
+
+        self.on_select_session(stts)
 
     def clear_results(self)->None:
         self.result_list.clear()
@@ -585,7 +586,8 @@ class _LvItem:
         self.color    = color
 
         self.refresh_row()
-        self.column.update()
+        if self.column.parent is not None:
+            self.column.update()
 
     def _get_speaker_row(self, item: ResultSegment)->ft.Row:
         row = ft.Row()

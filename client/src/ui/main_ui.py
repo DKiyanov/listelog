@@ -16,6 +16,7 @@ from src.file.file_reader import *
 from src.ui.file_upload_ui import *
 from src.ui.device_row_ui import *
 from src.ui.result_ui import *
+from src.ui.input_text_dlg_ui import *
 
 from src.utils import *
 from src.translate import lcvt
@@ -45,7 +46,7 @@ class AudioRecorderApp:
 
         self.page.title = "Audio Capture"
         # self.page.window.width = 700
-        # self.page.window.height = 250
+        self.page.window.height = 750
         self.recording_on = False
         self.recording_source_list: list[RecordSourceInfo] = []
         self.recording_source_ids = set()
@@ -64,7 +65,7 @@ class AudioRecorderApp:
 
         self.audio_packet_num: int = 0  # глобальный счётчик отправляемых на сервер пакетов
 
-        self.result_view: ResultView = ResultView(self.page, self.net_client)
+        self.result_view: ResultView = ResultView(self.page, self.net_client, self._on_select_session)
 
         self.settings_dialog: Optional[SettingsDialog] = None
 
@@ -314,8 +315,13 @@ class AudioRecorderApp:
 
         self.settings_dialog.open()
 
+    def _on_select_session(self, stts: SttSession):
+        self.title.value = stts.title
+        self.page.update()
+
     def _on_settings_input_ok(self):
         self.main_status_refresh()
+        self.page.update()
 
     def _on_row_change(self, _row: DeviceRow) -> None:
         record_possible = False
@@ -399,7 +405,12 @@ class AudioRecorderApp:
 
         if self.title.value == "":
             show_toast(self.page, f"{lcvt('0024|Введите описание:')}\n{self.chk_srver_stt.label}\n{self.chk_record_to_file.label}")
-            return            
+            return
+        
+        if len(self.result_view.result_list) != 0:
+            new_title = await input_text_dlg(self.page, lcvt("0025|Начать новую запись"), lcvt("0026|Описание"), "", self.title.value)
+            if new_title is None: return
+            self.title.value = new_title
 
         self.recording_source_list.clear()
 

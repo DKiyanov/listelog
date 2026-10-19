@@ -40,6 +40,16 @@ class SettingsDialog:
             can_reveal_password=True,
         )
 
+        self.login_btn = ft.Container(
+            content=ft.Row(
+                alignment=ft.MainAxisAlignment.END,
+                controls=[
+                    ft.Button(lcvt("0417|Войти"), icon=ft.Icons.CHECK , on_click=self._handle_login)
+                ]
+            ),
+            margin=ft.Margin.only(bottom=8)
+        )
+
         # Цветовая тема
         def theme_changed(e):
             set_theme_from_str(page, self.theme_dropdown.value)
@@ -93,6 +103,7 @@ class SettingsDialog:
                     self.url_input,
                     self.login_input,
                     self.password_input,
+                    self.login_btn,
                     theme_row,
                     language_row
                 ],
@@ -100,8 +111,8 @@ class SettingsDialog:
                 spacing=15,
             ),
             actions=[
-                ft.Button(lcvt("0409|Отмена"), icon=ft.Icons.CHECK , on_click=self._handle_cancel),
-                ft.Button(lcvt("0410|Ок"), icon=ft.Icons.CANCEL, on_click=self._handle_ok),
+                ft.Button(lcvt("0409|Отмена"), icon=ft.Icons.CANCEL, on_click=self._handle_cancel),
+                ft.Button(lcvt("0410|Сохранить"), icon=ft.Icons.CHECK, on_click=self._handle_ok),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
             modal=True,
@@ -170,7 +181,13 @@ class SettingsDialog:
         self.page.update()
         return is_valid
 
+    def _handle_login(self) -> None:
+        self._handle_ok_ex(False)
+
     def _handle_ok(self) -> None:
+        self._handle_ok_ex(True)
+
+    def _handle_ok_ex(self, login: bool) -> None:
         """Обработчик нажатия кнопки 'Ок'."""
         if not self._validate():
             return
@@ -181,15 +198,18 @@ class SettingsDialog:
         theme = self.theme_dropdown.value or "system"
         language = self.language_dropdown.value or self.system_language
 
-        if self.config_manager.password_lock:
-            success = self.net_client.login(self.config_manager)
-            if not success:
-                if " (401): {" in self.net_client.last_error:
-                    show_toast(self.page, lcvt("0415|Необходимо обновить токен"))
-                else:
-                    show_toast(self.page, self.net_client.last_error)
+        if login:
+            if self.config_manager.password_lock:
+                success = self.net_client.login(self.config_manager)
+                if not success:
+                    if " (401): {" in self.net_client.last_error:
+                        show_toast(self.page, lcvt("0415|Необходимо обновить токен"))
+                    else:
+                        show_toast(self.page, self.net_client.last_error)
+            else:
+                success = self.net_client.logup(base_url, login_username, password)
         else:
-            success = self.net_client.logup(base_url, login_username, password)
+            success = True
         
         if success:
             self.config_manager.save(base_url, login_username, theme, language)            

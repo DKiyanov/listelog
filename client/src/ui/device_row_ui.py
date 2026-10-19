@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import flet as ft
 
+from pathlib import Path
 
 from src.audio.my_audio import *
 from src.utils import *
@@ -32,6 +33,14 @@ class DeviceRow:
         self.audio_source: Optional[AudioSource] = None
 
         self.is_recording = False
+
+        self.set_default = self.device_type != DeviceType.MICROPHONE or self.source_id == 1
+        self.default_path = config_dir / f"{self.device_type}_{self.source_id}.txt"
+        self.default_dev_name = ""
+
+        if self.set_default and self.default_path.exists():
+            with open(self.default_path, 'r', encoding='utf-8') as file:
+                self.default_dev_name = file.read()
 
         # GUI элементы
         self.chk_enable_device: ft.Checkbox = ft.Checkbox(value=False, on_change=self.toggle_device)
@@ -127,7 +136,14 @@ class DeviceRow:
         if self.chk_enable_device.value:
             # Переинициализируем поток, если устройство поменяли "на лету"
             self.chk_enable_device.value = False
-            await self.toggle_device()            
+            await self.toggle_device() 
+        
+        self.chk_enable_device.value = True
+        await self.toggle_device()         
+
+        if self.set_default:
+            with open(self.default_path, 'w', encoding='utf-8') as file:
+                file.write(self.dd_devices.text or "")        
 
     def on_chunk(self, mtime: int, data: np.ndarray) -> None:
         self.on_raw_chunk(RawChunk(self.source_id, mtime, data))
@@ -189,15 +205,17 @@ class DeviceRow:
         if self.dd_devices.value is not None and not any(dev for dev in devices if dev.id == self.dd_devices.value):
             self.dd_devices.value = None
 
-        set_default = self.dd_devices.value is None and self.device_type != DeviceType.MICROPHONE or self.source_id == 1        
-
         self.dd_devices.options.clear()
         for dev in devices:
             self.dd_devices.options.append(ft.DropdownOption(key=dev.id, text=dev.name))
 
-        if set_default and devices:
-            # Выставляем устройство по умолчанию
-            self.dd_devices.value = devices[0].id
+        if self.set_default and devices and self.dd_devices.value is None: # Выставляем устройство по умолчанию
+            dev_id = next((dev.id for dev in devices if dev.name == self.default_dev_name), None)
+            if dev_id is not None:
+                self.dd_devices.value = dev_id
+            else:                
+                self.dd_devices.value = devices[0].id
+                self.default_dev_name = devices[0].name
 
         not_has_value = self.dd_devices.value is None
 

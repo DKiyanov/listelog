@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from typing import Callable, List
 import numpy as np
+from pathlib import Path
 
 SERVICE_NAME = "listelog"
+config_dir = Path.home() / f".{SERVICE_NAME}"
 
 @dataclass
 class RawChunk:
