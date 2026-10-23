@@ -47,7 +47,7 @@ class AudioRecorderApp:
         self.page.title = "Audio Capture"
         # self.page.window.width = 700
         self.page.window.height = 750
-        self.recording_on = False
+        self.is_recording_on = False
         self.recording_source_list: list[RecordSourceInfo] = []
         self.recording_source_ids = set()
 
@@ -111,11 +111,14 @@ class AudioRecorderApp:
             visible=False
         )
 
+        self.is_pause_on: bool = False
+        self.is_from_file = False
+
         self.title: ft.TextField = ft.TextField(expand=True)
-        self.btn_start: ft.Button = ft.Button(lcvt("0001|Старт"), icon=ft.Icons.PLAY_ARROW, on_click=self.start_recording,
-                                              disabled=True)
+        self.btn_start: ft.Button = ft.Button(lcvt("0001|Старт"), icon=ft.Icons.PLAY_ARROW, on_click=self.start_recording, disabled=True)
+        self.btn_pause: ft.Button = ft.Button(on_click=self.pause_recording, disabled=True)
         self.btn_stop: ft.Button = ft.Button(lcvt("0002|Стоп"), icon=ft.Icons.STOP, on_click=self.stop_recording, disabled=True)
-        self.lbl_status: ft.Text = ft.Text(lcvt("0003|Статус: Ожидание"), color=ft.Colors.BLUE, expand=True)
+        self.lbl_status: ft.Text = ft.Text("", expand=True)
         self.lbl_lag: ft.Text = ft.Text(lcvt("0004|Отставание: 0 сек."), color=ft.Colors.BLUE, visible=False)
 
         self.chk_srver_stt: ft.Checkbox = ft.Checkbox(label=lcvt("0005|Речь в текст"), value=True, label_position=ft.LabelPosition.LEFT)
@@ -124,6 +127,7 @@ class AudioRecorderApp:
         self.btn_open_record_folder: ft.IconButton = ft.IconButton(icon=ft.Icons.FOLDER_ROUNDED, on_click=self.open_record_folder, icon_color=ft.Colors.YELLOW, tooltip=lcvt("0007|Открыть папку с записанными файлами"))
 
         # self.btn_test: ft.Button = ft.Button("Тест", icon=ft.Icons.TELEGRAM, on_click=self.test_btn_click)
+        self.set_view_status()
 
     def build_titlebar(self) -> ft.Container:
         custom_title_bar = ft.Container(
@@ -215,6 +219,7 @@ class AudioRecorderApp:
             controls=[
                 ft.Text(lcvt("0013|Управление записью:"), weight=ft.FontWeight.BOLD, width=170),
                 self.btn_start,
+                self.btn_pause,
                 self.btn_stop,
                 # self.btn_test,
                 self.lbl_status,
@@ -333,12 +338,12 @@ class AudioRecorderApp:
         self.btn_start.disabled = not record_possible
 
     def _on_raw_chank(self, chunk: RawChunk) -> None:
-        if self.recording_on and chunk.source_id in self.recording_source_ids:
+        if self.is_recording_on and chunk.source_id in self.recording_source_ids:
             asyncio.create_task(self.file_saver.add_chunk(chunk))
 
     def _on_voice_chunk(self, chunk: VoiceChunk) -> None:
         """Callback: Буфер накопил и отдал VoiceChunk"""
-        if self.recording_on and chunk.source_id in self.recording_source_ids:            
+        if self.is_recording_on and chunk.source_id in self.recording_source_ids and not self.is_pause_on:            
             asyncio.create_task(self.proc_queue.put(chunk))
 
     async def _on_encoded_chunk(self, packet: EncodedChunk) -> None:
@@ -372,7 +377,7 @@ class AudioRecorderApp:
             file_path = self.file_upload_row.file_path_input.value
             title = Path(file_path).name
         
-        asyncio.create_task(self.start_recording_ex(True, lcvt("0015|Статус: загрузка файла на сервер"), title))
+        asyncio.create_task(self.start_recording_ex(True, True, title))
       
 
     def _on_file_finish(self) -> None:
@@ -421,7 +426,7 @@ class AudioRecorderApp:
         if not self.recording_source_list:
             return
 
-        await self.start_recording_ex(self.chk_srver_stt.value,lcvt("0018|Статус: ЗАПИСЬ..."), self.title.value)
+        await self.start_recording_ex(self.chk_srver_stt.value, False, self.title.value)
 
         for dev_row in self.dev_rows:
             dev_row.start_recording()        
@@ -429,7 +434,8 @@ class AudioRecorderApp:
         if self.chk_record_to_file.value:
             await self.file_saver.start_recording(self._get_record_file_path(), self.recording_source_ids, SAMPLE_RATE)        
 
-    async def start_recording_ex(self, net: Optional[bool], status: str, title: str) -> None:
+    async def start_recording_ex(self, net: Optional[bool], from_file:bool, title: str) -> None:
+        self.is_from_file = from_file
         self.result_view.clear_results()
 
         self.recording_source_ids = {source.source_id for source in self.recording_source_list}
@@ -443,15 +449,54 @@ class AudioRecorderApp:
         self.file_upload_row.set_disabled(True)
 
         self.btn_start.disabled = True
+        self.btn_pause.disabled = False
         self.btn_stop.disabled = False
         self.title.disabled = True
-        self.lbl_status.value = status
-        self.lbl_status.color = ft.Colors.RED
+
         self.lbl_lag.visible = True
         self.result_view.clear()
         self.page.update()
 
-        self.recording_on = True
+        self.is_recording_on = True
+        self.is_pause_on = False
+        self.set_view_status()
+
+    def pause_recording(self) -> None:
+        self.is_pause_on = not self.is_pause_on
+        self.set_view_status()
+        
+    def set_view_status(self) -> None:
+        if self.is_recording_on:
+            if self.is_pause_on:
+                self.lbl_status.color  = ft.Colors.BLUE
+                self.lbl_status.value = lcvt("0027|Статус: Пауза")
+            else:
+                self.lbl_status.color  = ft.Colors.RED
+                if self.is_from_file:
+                    self.lbl_status.value = lcvt("0015|Статус: загрузка файла на сервер")
+                else:
+                    self.lbl_status.value = lcvt("0018|Статус: ЗАПИСЬ...")
+        else:
+            self.lbl_status.value = lcvt("0019|Статус: Ожидание")
+            self.lbl_status.color  = ft.Colors.GREEN
+
+        if self.lbl_status.parent:
+            self.lbl_status.update()       
+        
+        if self.is_recording_on:
+            if self.is_pause_on:
+                self.btn_pause.icon = ft.Icons.PLAY_ARROW
+                self.btn_pause.content = ft.Text(lcvt("0028|Продолжить"))
+                self.main_status
+            else:
+                self.btn_pause.icon = ft.Icons.PAUSE
+                self.btn_pause.content = ft.Text(lcvt("0029|Пауза"))
+        else:
+            self.btn_pause.icon = ft.Icons.DO_NOT_DISTURB
+            self.btn_pause.content = ft.Text(lcvt("0029|Пауза"))
+        
+        if self.btn_pause.parent:
+            self.btn_pause.update()
 
     async def stop_recording(self) -> None:
         """Остановка записи и обработка остатков буфера."""
@@ -469,15 +514,17 @@ class AudioRecorderApp:
         await self.net_client.stop_recording()
 
         self.btn_start.disabled = False
+        self.btn_pause.disabled = True
         self.btn_stop.disabled = True
         self.title.disabled = False
-        self.lbl_status.value = lcvt("0019|Статус: Ожидание")
-        self.lbl_status.color = ft.Colors.GREEN
         self.lbl_lag.visible = False
         self.page.update()
-        self.recording_on = False
+        self.is_recording_on = False
         self.recording_source_list.clear()
         self.recording_source_ids.clear()
+        self.is_pause_on = False
+
+        self.set_view_status()
 
     def _format_time(self, seconds: int) -> str:
         hours = seconds // 3600

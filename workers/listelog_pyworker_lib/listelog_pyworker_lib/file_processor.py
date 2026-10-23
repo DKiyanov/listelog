@@ -43,8 +43,28 @@ class Task:
         self.in_proc_file = self.in_proc_dir / f"{self.sid}_{self.cid}_{self.work_type}_{self.next_work_type}_{last_time_str}{original_file.suffix}"
         original_file.rename(self.in_proc_file)   
 
+    def _get_empty_result(self) -> RecognitionResult:
+        assert self.session_dir is not None
+        
+        chunk_info_path: str = str(self.session_dir / "info" / f"{self.cid}_info.json")
+        with open(chunk_info_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            chunk_info = ChunkInfo(**data) 
+
+        result = RecognitionResult(
+            tss=chunk_info.tss,
+            tse=chunk_info.tse,
+            spkid=f"{chunk_info.src}/999999",
+            text=''
+        )
+
+        return result        
+
     def save_sttd_result(self, result: List[RecognitionResult], spks: List[RecognitiontSpeaker]) -> None:
             assert self.session_dir is not None
+
+            if not result:
+                result.append(self._get_empty_result())            
 
             session_result_dir = self.session_dir / "result"
             session_result_dir.mkdir(exist_ok=True)

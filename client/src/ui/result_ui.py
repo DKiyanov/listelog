@@ -38,6 +38,8 @@ class ResultView:
         self.spks: dict[str, Speaker] = {}
 
         self.spk_symbol = "🧑"
+        self.spknum_illegible = "/999999" # номер зарезервирован для..
+        self.spk_illegible_title = lcvt("0226|ничего не разобрать")
 
         self.lv = ft.ListView(        
             expand=True, 
@@ -197,9 +199,19 @@ class ResultView:
         
         self.result_list.extend(results)
         self.result_list.sort(key=lambda x: x.tss)
-
+        
         for spk in spks:
             self.spks[spk.spkid] = spk
+
+        for result in results:
+            if not self.spks.get(result.spkid):
+                self.spks[result.spkid] = Speaker(
+                    spkid=result.spkid,
+                    title=self.spk_illegible_title if result.spkid.endswith(self.spknum_illegible) else result.spkid,
+                    ref_spkid="",
+                    is_good=False,
+                    is_bad=True
+                )
 
         self._refresh_speaker_names()
 
