@@ -10,6 +10,8 @@ from src.ui.stt_sessions_sel_dlg_ui import *
 from src.translate import lcvt
 
 from src.ui.llm.llm_text_processor import *
+from src.ui.result_save_dlg_ui import *
+from src.ui.input_text_dlg_ui import *
 
 _RV: 'ResultView'
 
@@ -37,7 +39,6 @@ class ResultView:
         self.net_spknames: List[str] = []
         self.spks: dict[str, Speaker] = {}
 
-        self.spk_symbol = "🧑"
         self.spknum_illegible = "/999999" # номер зарезервирован для..
         self.spk_illegible_title = lcvt("0226|ничего не разобрать")
 
@@ -84,25 +85,20 @@ class ResultView:
         self.spknmap.clear()
         self.selected.clear()   
 
-    def get_text(self)->str:
-        text: str = ""
-        spk_name: str = "-"
-
-        for item in self.result_list:
-            if self.selected:
-                ikey = self._get_item_key(item)
-                if not ikey in self.selected:
-                    continue
-
-            item_spk_name = self.spknmap[item.spkid]
-
-            if spk_name != item_spk_name:
-                spk_name = item_spk_name
-                text += f"\n {self.spk_symbol} {spk_name}"
-
-            text += f"\n{item.text}"
+    def get_results(self) -> List[ResultSegment]:
+        if not self.selected:
+            return self.result_list
         
-        return text
+        result: List[ResultSegment] = []
+        for item in self.result_list:
+            ikey = self._get_item_key(item)
+            if ikey in self.selected:
+                result.append(item)
+        
+        return result                   
+
+    def get_text(self)->str:
+        return result_get_text(TextFormat.text, self.get_results(), self.spknmap)
 
     async def btn_paly_click(self):
         if not self.selected:
@@ -276,6 +272,7 @@ class ResultView:
                     color    = color,
                     spkname  = spkname,
                     item     = item,
+                    text     = item.text,
                     ikey     = ikey,
                     column   = ft.Column(key = ikey)
                 )
@@ -287,7 +284,8 @@ class ResultView:
                     is_first = first,
                     is_last  = last,
                     color    = color,
-                    spkname  = spkname                    
+                    spkname  = spkname,
+                    text     = item.text                    
                 )
 
             self.lv.controls.append(lv_item.column)
@@ -339,195 +337,20 @@ class ResultView:
             
         asyncio.create_task(self.refresh_result(False))
 
-    def btn_text_view_click(self):
-        text = self.get_text()
+    async def btn_text_view_click(self):
+        if not self.result_list: return
 
-        def on_text_show_result(text:str) -> None:
-            sel_item: ResultSegment | None = None
+        results = self.get_results()
 
-            for item in self.result_list:
-                if self.selected:
-                    ikey = self._get_item_key(item)
-                    if ikey in self.selected:
-                        sel_item = item
-                        break
-            if not sel_item: return
+        if len(results) != 1:
+            result_save_dlg(self.page, results, self.spknmap)
+            return
 
-            lines = text.split("\n")
-            lines.append(f"{self.spk_symbol} ")
-
-            spks: str = ""
-            spkl: List[str] = []
-            first: bool = True
-
-            for line in lines:
-                if line.startswith(f"{self.spk_symbol} "):
-                    if spkl:
-                        spkt = "\n".join(spkl)
-                        if first:
-                            first = False
-                            sel_item.text = spkt
-                        else:
-                            new_spkid = f"{sel_item}@{sel_item.tss}"
-                            self.spknmap[new_spkid] = spks
-                            self.result_list.append(ResultSegment(
-                                cid   = sel_item.cid,
-                                tss   = sel_item.tss + 1,
-                                tse   = sel_item.tse,
-                                spkid = new_spkid,
-                                text  = spkt
-                            ))
-
-                    spkl.clear()
-                    spks = line[2:]
-                else:
-                    spkl.append(line)
-
-            self.result_list.sort(key=lambda x: x.tss)
-
-            asyncio.create_task(self.refresh_result(True))
-
-        self._text_show(text, on_text_show_result if len(self.selected) == 1 else None)
-
-    def _text_show(self, text: str, result_callback: Callable[[str], None] | None):
-        selection = {"start": -1, "end": -1}
-
-        def on_selection_change(e: ft.TextSelectionChangeEvent[ft.TextField]) -> None:
-            if e.control.selection is None: return  
-            selection["start"] = e.control.selection.start 
-            selection["end"] = e.control.selection.end
-
-        # Создаем многострочное поле ввода
-        text_input = ft.TextField(
-            value=text,
-            multiline=True,
-            expand=True,
-            autofocus=True,
-            border=ft.InputBorder.NONE,
-            on_selection_change=on_selection_change
-        )
-
-        text_input.on_selection_change
-
-        def close_dialog():
-            dialog.open = False
-            self.page.update()
-
-        def on_cancel(e):
-            close_dialog()
-
-        def on_ok(e):
-            if result_callback:
-                result_callback(text_input.value)
-            close_dialog()
-
-        def on_copy(e):
-            full_text = text_input.value or ""
-            start = selection["start"]
-            end  = selection["end"]
-
-            # Если индексы не равны, значит было активное выделение
-            if start != end:
-                start = min(start, end)
-                end = max(start, end)
-                selected_text = full_text[start:end]
-            else:
-                selected_text = full_text     
-
-            if selected_text:
-                asyncio.create_task(ft.Clipboard().set(selected_text))
-
-        def on_speaker_selected(e: ft.Event[ft.PopupMenuItem]):
-            current_text = text_input.value or ""
-            cursor_pos: int = selection["start"]
-            cursor_pos -= 1
-            if cursor_pos < 0: return
-            if cursor_pos >= len(current_text): return
-
-            spk_name = e.control.data
-            text_to_insert = f"\n{self.spk_symbol} {spk_name}\n" 
-                            
-            new_text = current_text[:cursor_pos].strip() + text_to_insert + current_text[cursor_pos:].strip()
-            text_input.value = new_text
-            text_input.update()
-
-        jspknames = sorted(set(self.spknmap.values()))
-
-        btn_sel_int = ft.PopupMenuButton(
-                icon=ft.Icons.HOW_TO_REG,  
-                menu_position= ft.PopupMenuPosition.UNDER,
-                tooltip=lcvt("0214|Выбрать из присвоеных спикеров"),
-                items=[
-                    ft.PopupMenuItem(
-                        content=name,
-                        data=name,                        
-                        on_click=on_speaker_selected,  
-                    )
-                    for name in jspknames
-                ],
-            )            
-
-        btn_sel_spk = ft.PopupMenuButton(
-                icon=ft.Icons.PEOPLE_ALT,  
-                menu_position= ft.PopupMenuPosition.UNDER,
-                tooltip=lcvt("0215|Выбрать из сохранённого списка спикеров"),
-                items=[
-                    ft.PopupMenuItem(
-                        content=name,
-                        data=name,                       
-                        on_click=on_speaker_selected,  
-                    )
-                    for name in self.net_spknames
-                ],
-            )            
-
-        btn_copy = ft.IconButton(
-            icon=ft.Icons.COPY, 
-            tooltip=lcvt("0216|Копировать"), 
-            on_click=on_copy
-        )
-
-        btn_cancel = ft.IconButton(
-            icon=ft.Icons.CLOSE, 
-            icon_color=ft.Colors.RED,
-            tooltip=lcvt("0217|Отмена"), 
-            on_click=on_cancel
-        )     
-        
-        btn_ok = ft.IconButton(
-            icon=ft.Icons.CHECK, 
-            icon_color=ft.Colors.GREEN,
-            tooltip=lcvt("0218|Готово"), 
-            on_click=on_ok
-        )
-                
-        # Кнопки управления
-        actions: List[ft.Control] = [
-            btn_copy,
-            btn_sel_int,
-            btn_sel_spk,
-            btn_cancel,
-            btn_ok
-        ]
-
-        if not result_callback:
-            actions.remove(btn_sel_int)
-            actions.remove(btn_sel_spk)
-            actions.remove(btn_ok)
-
-        # Инициализация и открытие диалога
-        dialog = ft.AlertDialog(
-            content=ft.Container(content=text_input, width=(self.page.width or 600) * 2 / 3),
-            actions=actions,
-            actions_alignment=ft.MainAxisAlignment.END,
-            shape=ft.RoundedRectangleBorder(radius=12),
-            content_padding=ft.Padding.only(left=10, right=10, top=4, bottom=4),
-            actions_padding=ft.Padding.only(left=0, right=10, top=0, bottom=8),            
-        )
-
-        self.page.overlay.append(dialog)
-        dialog.open = True
-        self.page.update()
+        result = results[0]
+        text = await input_text_dlg(self.page, "Редактирование", self.spknmap[result.spkid], "", result.text)
+        if text:
+            result.text = text
+            await self.refresh_result(True)
 
 @dataclass
 class _LvItem:
@@ -536,6 +359,7 @@ class _LvItem:
     color: str
     spkname: str
     item: ResultSegment
+    text: str
     ikey: str
     column: ft.Column
 
@@ -584,8 +408,8 @@ class _LvItem:
                 padding=ft.Padding.only(bottom=4),
             ))
 
-    def if_change(self, is_first: bool, is_last: bool, color: str, spkname: str) ->None:
-        if self.is_first == is_first and self.is_last == is_last and self.color == color:
+    def if_change(self, is_first: bool, is_last: bool, color: str, spkname: str, text: str) ->None:
+        if self.is_first == is_first and self.is_last == is_last and self.color == color and self.text == text:
             if self.spkname == spkname:
                 return
 
@@ -596,6 +420,7 @@ class _LvItem:
         self.is_first = is_first 
         self.is_last  = is_last 
         self.color    = color
+        self.text     = text
 
         self.refresh_row()
         if self.column.parent is not None:

@@ -60,9 +60,6 @@ class AudioRecorderApp:
 
         set_theme_from_str(self.page, self.config_manager.theme)
 
-        if self.config_manager.language:
-            LanguageManager().load_language(self.config_manager.language)
-
         self.audio_packet_num: int = 0  # глобальный счётчик отправляемых на сервер пакетов
 
         self.result_view: ResultView = ResultView(self.page, self.net_client, self._on_select_session)
@@ -245,6 +242,13 @@ class AudioRecorderApp:
         self.config_manager.load()
         if not self.config_manager.config_ok:
             self.show_settings_dialog()
+
+        if self.config_manager.language:
+            LanguageManager().load_language(self.config_manager.language)
+        else:
+            os_language = get_os_language()
+            if not LanguageManager().load_language(os_language):
+                LanguageManager().load_language('en')
 
         if self.config_manager.config_ok:
             self.net_client.login(self.config_manager)

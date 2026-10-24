@@ -8,6 +8,7 @@ async def input_text_dlg(page: ft.Page, title: str, label: str, hint:str, text:s
     future = loop.create_future()
 
     input_text: ft.TextField = ft.TextField(
+        value=text,
         label=label,
         hint_text= hint
     )

@@ -110,6 +110,7 @@ class FileUploadRow:
             ),
         )     
 
+        assert self._fconv_dialog
         self.page.show_dialog(self._fconv_dialog)        
         self.file_reader.read_file(self.file_path_input.value, self.chk_mono.value==True)
 
