@@ -2,8 +2,10 @@ from src.net.net_client import NetClient
 import flet as ft
 from src.models import *
 import asyncio
+import io
 
 from src.net.net_client import *
+from src.net.net_client_llm import *
 from src.audio.play_sound import *
 from src.utils import show_confirm_dialog
 from src.ui.stt_sessions_sel_dlg_ui import *
@@ -20,6 +22,7 @@ class ResultView:
         self, 
         page: ft.Page,
         net_client: NetClient,
+        net_client_llm: NetClientLLM,
         on_select_session: OnSelectSttSession
     ) -> None:
         
@@ -28,6 +31,7 @@ class ResultView:
         
         self.page = page
         self.net_client = net_client
+        self.net_client_llm = net_client_llm
         self.on_select_session = on_select_session
         self.llmtp: LlmTextProcessor | None = None
 
@@ -106,7 +110,7 @@ class ResultView:
             return
 
         ab_cid: int = -1
-        audio_buffer: BytesIO | None = None
+        audio_buffer: io.BytesIO | None = None
 
         cur_cid: int = -1
         cur_cid_tss: int = 0
@@ -176,7 +180,7 @@ class ResultView:
 
     async def btn_llm_click(self):
         if not self.llmtp:
-            self.llmtp = LlmTextProcessor(self.page, self.net_client)
+            self.llmtp = LlmTextProcessor(self.page, self.net_client_llm)
 
         text = self.get_text()
         await self.llmtp.open(text)

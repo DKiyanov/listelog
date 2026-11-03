@@ -1,0 +1,9 @@
+numpy
+ffmpeg-python
+soundfile
+httpx
+websockets
+onnxruntime==1.26.0
+psutil
+scipy
+deepfilter_stream

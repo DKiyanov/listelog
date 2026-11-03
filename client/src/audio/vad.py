@@ -38,7 +38,7 @@ class VADProcessor:
         self._context: np.ndarray = np.zeros(self._context_size, dtype=np.float32)
         self._sr_tensor: np.ndarray = np.array([self.sample_rate], dtype=np.int64)
 
-    def voice_detected(self, chunk: np.ndarray) -> bool:
+    def voice_detected(self, chunk: np.ndarray) -> tuple[bool, float] :
         """
         Определяет наличие голоса в переданном чанке аудио.
 
@@ -80,7 +80,7 @@ class VADProcessor:
         # Извлечение скалярного значения вероятности
         speech_prob: float = float(out_probability[0, 0])
 
-        return speech_prob >= self.threshold
+        return speech_prob >= self.threshold, speech_prob
 
     def reset_states(self) -> None:
         """Сброс контекста и скрытых состояний LSTM между независимыми аудио-потоками."""

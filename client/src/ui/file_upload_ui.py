@@ -2,17 +2,20 @@ import flet as ft
 
 from src.models import *
 from src.file.file_reader import *
+from src.audio.noice_reductor import *
 from src.translate import lcvt
 
 class FileUploadRow:
     def __init__(
         self, 
         page: ft.Page,
+        denoiser: NoiseReductionWorker | None,
         on_start: SimpleCallBack,
         on_voice_chunk: OnVoiceChunk,
         on_finish: SimpleCallBack,
     ) -> None:        
         self.page = page
+        self.denoiser = denoiser
 
         self.on_start_parent: SimpleCallBack = on_start
         self.on_finish_parent: SimpleCallBack = on_finish
@@ -119,7 +122,7 @@ class FileUploadRow:
         self.channels_count = channels_count
         self.duration = duration
         self.total_duration = self.channels_count * self.duration 
-        self.buffers = {i: VoiceBuffer(i, self._on_self_voice_chunk) for i in range(channels_count)}
+        self.buffers = {i: VoiceBuffer(source_id = i, on_chunk= self._on_self_voice_chunk, denoiser = self.denoiser) for i in range(channels_count)}
         self.packet_count = 0
         self.on_start_parent()
 

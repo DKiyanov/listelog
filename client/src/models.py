@@ -18,6 +18,7 @@ class VoiceChunk:
     source_id: int  # Идентификатор источника
     ts_start: int   # время в миллисекундах от начала записи
     ts_end: int     # время конца в миллисекундах от начала записи
+    is_bad: bool    # очень плохое соотношение голос/шум - сохранить но не транскрибировать
     raw_data: np.ndarray  # PCM-данные в формате float32 numpy array
 
 @dataclass
@@ -26,6 +27,7 @@ class EncodedChunk:
     source_id: int  # Идентификатор источника
     ts_start: int   # время в миллисекундах от начала записи
     ts_end: int     # время конца в миллисекундах от начала записи
+    is_bad: bool    # очень плохое соотношение голос/шум - сохранить но не транскрибировать
     encoded_data: bytes  # OGG данные
 
 @dataclass(frozen=False)

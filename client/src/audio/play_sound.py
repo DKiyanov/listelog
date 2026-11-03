@@ -1,6 +1,7 @@
 import pygame
 
-from src.audio.my_audio import *
+from src.audio.audio_queue import *
+from src.audio.audio_device import *
 from src.utils import *
 
 import asyncio

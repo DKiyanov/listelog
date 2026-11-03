@@ -4,16 +4,18 @@ import flet as ft
 
 from pathlib import Path
 
-from src.audio.my_audio import *
+from src.audio.audio_queue import *
+from src.audio.audio_device import *
 from src.utils import *
 from src.audio.play_sound import *
+from src.audio.noice_reductor import *
 from src.translate import lcvt
-
 
 class DeviceRow:
     def __init__(
             self,
             page: ft.Page,
+            denoiser: NoiseReductionWorker | None,
             device_type: DeviceType,
             source_id: int,
             on_raw_chunk: OnRawChunk,
@@ -29,7 +31,7 @@ class DeviceRow:
         self.on_change: Callable[[DeviceRow], None] = on_change
         self.dev_rows: List[DeviceRow] = dev_rows
 
-        self.buffer: VoiceBuffer = VoiceBuffer(self.source_id, on_voice_chunk)
+        self.buffer: VoiceBuffer = VoiceBuffer(source_id = self.source_id, on_chunk = on_voice_chunk, denoiser = denoiser)
         self.audio_source: Optional[AudioSource] = None
 
         self.is_recording = False
@@ -110,7 +112,8 @@ class DeviceRow:
             self.audio_source = AudioSource(
                 device_type=self.device_type,
                 device_id=selected_device_id,
-                chunk_size=RAW_CHANK_SIZE,
+                chunk_size=ORIG_RAW_CHANK_SIZE,
+                sample_rate=ORIG_SAMPLE_RATE,
                 on_chunk=self.on_chunk,
                 on_break=self.on_device_break
             )
@@ -149,12 +152,13 @@ class DeviceRow:
         self.on_raw_chunk(RawChunk(self.source_id, mtime, data))
 
         is_speach: bool = False
+        rms: float = 0.0
 
         if self.is_recording:
             # Если включена запись — отправляем данные в буфер:
-            is_speach = self.buffer.add_samples(data, mtime)
+            is_speach, rms = self.buffer.add_samples(data, mtime)
         else:
-            is_speach = self.buffer.is_voice(data)
+            is_speach, rms = self.buffer.is_voice(data)
 
         rms: float = self.calc_rms(data)
         gain: float = 1

@@ -100,7 +100,7 @@ class FileSaver:
         if self.file_handle is None: return
         await self._loop.run_in_executor(None, self.file_handle.write, chunk)        
 
-    async def _stop_recording(self) -> None:
+    async def stop_recording(self) -> None:
         if not self._is_recording:
             return
 

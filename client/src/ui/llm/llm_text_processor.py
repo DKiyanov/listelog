@@ -1,16 +1,16 @@
 import flet as ft
 
 from src.ui.llm.llm_models import *
-from src.net.net_client import *
+from src.net.net_client_llm import *
 from src.translate import *
 
 # ---------------------------------------------------------------------------
 # Диалог обработки текста с помощью LLM
 # ---------------------------------------------------------------------------
 class LlmTextProcessor:
-    def __init__(self, page: ft.Page, net_client: NetClient):
+    def __init__(self, page: ft.Page, net_client_llm: NetClientLLM):
         self.page = page
-        self.net: NetClient = net_client
+        self.net: NetClientLLM = net_client_llm
 
         self._prompts: list[Prompt] = []
         self._connections: list[LlmConnection] = []
@@ -140,7 +140,7 @@ class LlmTextProcessor:
         self.dd_prompt.value = None
         self.dd_llm.value = None
 
-        self.is_advanced_user = "llm_admin" in await self.net.get_user_roles()
+        self.is_advanced_user = "llm_admin" in await self.net.net_client.get_user_roles()
 
         await self._reload_prompts()
         await self._reload_connections()

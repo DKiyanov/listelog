@@ -8,5 +8,6 @@ httpx
 keyring
 websockets
 onnxruntime==1.26.0
+deepfilter_stream
 pyinstaller
 pillow

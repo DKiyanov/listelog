@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 from src.models import *
-from src.audio.my_audio import *
+from src.audio.audio_queue import *
 
 # Патч для скрытия окна терминала при использовании ffmpeg-python на Windows
 if sys.platform == "win32":
@@ -34,8 +34,8 @@ class FileReader:
         self.on_chunk: FileChunkCallback = on_chunk
         self.on_finish: SimpleCallBack = on_finish
 
-        self._sample_rate: int = SAMPLE_RATE
-        self._chunk_size: int = RAW_CHANK_SIZE
+        self._sample_rate: int = ORIG_SAMPLE_RATE
+        self._chunk_size: int = ORIG_RAW_CHANK_SIZE
         self._bytes_per_sample: int = 4  # PCM (float32)
 
         self._is_reading_on: bool = False

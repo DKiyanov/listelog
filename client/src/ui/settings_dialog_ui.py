@@ -1,6 +1,6 @@
 import flet as ft
 
-from src.net.net_client import *
+from src.net.net_client_login import *
 from src.config_manager import *
 from src.utils import *
 from src.translate import *
@@ -17,10 +17,10 @@ def set_theme_from_str(page: ft.Page, theme_name: str | None) -> None:
 class SettingsDialog:
     """Класс диалогового окна настроек."""
     
-    def __init__(self, page: ft.Page, config_manager: ConfigManager, net_client: NetClient, on_success_auth: Callable[[], None],) -> None:
+    def __init__(self, page: ft.Page, config_manager: ConfigManager, net_client_login: NetClientLogin, on_success_auth: Callable[[], None],) -> None:
         self.page: ft.Page = page
         self.config_manager: ConfigManager = config_manager
-        self.net_client: NetClient = net_client
+        self.net_client_login: NetClientLogin = net_client_login
         self.on_success_auth: Callable[[], None] = on_success_auth        
 
         # Инициализация элементов управления
@@ -200,14 +200,14 @@ class SettingsDialog:
 
         if login:
             if self.config_manager.password_lock:
-                success = self.net_client.login(self.config_manager)
+                success = self.net_client_login.login(self.config_manager.base_url, self.config_manager.login, self.config_manager.token)
                 if not success:
-                    if " (401): {" in self.net_client.last_error:
+                    if " (401): {" in self.net_client_login.last_error:
                         show_toast(self.page, lcvt("0415|Необходимо обновить токен"))
                     else:
-                        show_toast(self.page, self.net_client.last_error)
+                        show_toast(self.page, self.net_client_login.last_error)
             else:
-                success = self.net_client.logup(base_url, login_username, password)
+                success = self.net_client_login.logup(base_url, login_username, password)
         else:
             success = True
         

@@ -7,9 +7,11 @@ import flet as ft
 
 from src.models import *
 from src.config_manager import *
-from src.audio.my_audio import *
+from src.audio.audio_queue import *
 from src.file.file_saver import *
 from src.net.net_client import *
+from src.net.net_client_login import *
+from src.net.net_client_llm import *
 from src.ui.settings_dialog_ui import *
 from src.file.file_reader import *
 
@@ -17,6 +19,7 @@ from src.ui.file_upload_ui import *
 from src.ui.device_row_ui import *
 from src.ui.result_ui import *
 from src.ui.input_text_dlg_ui import *
+from src.audio.noice_reductor import *
 
 from src.utils import *
 from src.translate import lcvt
@@ -56,20 +59,27 @@ class AudioRecorderApp:
         self.encoder: Encoder = Encoder(output_format="ogg")
         self.proc_queue: ProcQueue = ProcQueue(encoder=self.encoder, on_packet_ready=self._on_encoded_chunk)
         self.file_saver = FileSaver()
-        self.net_client = NetClient(self.on_send, self.on_results, self.config_manager.config_dir)
+        self.net_client = NetClient()
+        self.net_client.set_callbacks(self.on_send, self.on_results)
+        self.net_client_login = NetClientLogin(self.net_client)
+        self.net_client_llm = NetClientLLM(self.net_client, self.config_manager.config_dir)
 
         set_theme_from_str(self.page, self.config_manager.theme)
 
         self.audio_packet_num: int = 0  # глобальный счётчик отправляемых на сервер пакетов
 
-        self.result_view: ResultView = ResultView(self.page, self.net_client, self._on_select_session)
+        self.result_view: ResultView = ResultView(self.page, self.net_client, self.net_client_llm, self._on_select_session)
 
         self.settings_dialog: Optional[SettingsDialog] = None
+
+        self.denoiser = NoiseReductionWorker(get_work_path("assets/deepfilter-stream/dfn3-512-v1/denoiser_model.onnx"), self._on_voice_chunk)
+        self.denoiser.start()
 
         self.dev_rows: list[DeviceRow] = []
         self.dev_rows.append(
             DeviceRow(
                 page, 
+                self.denoiser,
                 DeviceType.MICROPHONE, 
                 1, 
                 self._on_raw_chank, 
@@ -82,6 +92,7 @@ class AudioRecorderApp:
         self.dev_rows.append(
             DeviceRow(
                 page, 
+                self.denoiser,
                 DeviceType.LOOPBACK, 
                 100, 
                 self._on_raw_chank, 
@@ -92,7 +103,7 @@ class AudioRecorderApp:
             )            
         )
 
-        self.file_upload_row = FileUploadRow(self.page, self._on_file_upload_start, self._on_voice_chunk, self._on_file_finish)
+        self.file_upload_row = FileUploadRow(self.page, self.denoiser, self._on_file_upload_start, self._on_voice_chunk, self._on_file_finish)
 
         # GUI элементы
         self.main_status: ft.Text = ft.Text("", color=ft.Colors.BLUE, text_align=ft.TextAlign.CENTER)
@@ -251,7 +262,7 @@ class AudioRecorderApp:
                 LanguageManager().load_language('en')
 
         if self.config_manager.config_ok:
-            self.net_client.login(self.config_manager)
+            self.net_client_login.login(self.config_manager.base_url, self.config_manager.login, self.config_manager.token)
 
         self.main_status_refresh()
 
@@ -262,7 +273,7 @@ class AudioRecorderApp:
             return
 
         if not self.net_client.is_login_ok:
-            self.main_status.value = self.net_client.last_error
+            self.main_status.value = self.net_client_login.last_error
             self.main_status_widget.visible = True
             return
 
@@ -318,7 +329,7 @@ class AudioRecorderApp:
             self.settings_dialog = SettingsDialog(
                 page=self.page,
                 config_manager=self.config_manager,
-                net_client=self.net_client,
+                net_client_login=self.net_client_login,
                 on_success_auth=self._on_settings_input_ok
             )
 
@@ -396,8 +407,8 @@ class AudioRecorderApp:
             show_toast(self.page, lcvt("0016|Настройте подключение к серверу"))   
             return False
 
-        if not self.net_client.login(self.config_manager):
-            show_toast(self.page, self.net_client.last_error)
+        if not self.net_client_login.login(self.config_manager.base_url, self.config_manager.login, self.config_manager.token):
+            show_toast(self.page, self.net_client_login.last_error)
             return False
 
         return self.net_client.is_login_ok     
@@ -514,7 +525,7 @@ class AudioRecorderApp:
         # Небольшая пауза, чтобы воркер успел обработать завершающие пакеты
         await asyncio.sleep(0.5)
 
-        await self.file_saver._stop_recording()
+        await self.file_saver.stop_recording()
         await self.net_client.stop_recording()
 
         self.btn_start.disabled = False
@@ -589,6 +600,7 @@ class AudioRecorderApp:
         self.dev_rows.append(
             DeviceRow(
                 self.page, 
+                self.denoiser,
                 DeviceType.MICROPHONE, mic_src_id, 
                 self._on_raw_chank, 
                 self._on_voice_chunk, 
