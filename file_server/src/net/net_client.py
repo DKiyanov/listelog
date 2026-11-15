@@ -40,6 +40,7 @@ class NetClient:
         self.token = token
         self.username = username
 
+        self._client = None
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             headers={"Authorization": f"Bearer {self.token}"}
@@ -82,7 +83,7 @@ class NetClient:
 
     async def start_recording(self, title: str) -> None:
         """Открывает новую сессию записи на сервере."""
-        if self._client == None: return
+        assert self._client           
 
         url: str = "/open-session"
         payload: Dict[str, str] = {"title": title}
@@ -102,10 +103,9 @@ class NetClient:
 
         await self._start_get_results()
 
-    async def send_packet(self, packet: EncodedChunk, cid: int, diarize: bool) -> None:
+    async def send_packet(self, packet: EncodedFragment, cid: int, diarize: bool) -> None:
         """Передает данные блока звукового потока на сервер."""
         assert self.current_sid
-        assert self.on_send
         if self._client == None: return
 
         if not self.current_sid:
@@ -137,7 +137,8 @@ class NetClient:
             self.sended_ms += size_ms
             self.cids[cid] = size_ms
 
-        self.on_send()
+        if self.on_send:
+            self.on_send()
 
     async def get_proced_audio(self, cid: int) -> io.BytesIO|None:
         """Возвращает сохранённые аудио-данные"""
@@ -232,6 +233,17 @@ class NetClient:
 
         return self._prepare_data(response_dict)
 
+    async def get_session_status(self, sid: str) -> SttSessionStatus:
+        assert self._client
+        url: str = "/get-stt-ses-status"
+
+        params: Dict[str, str] = {"sid": sid}
+
+        response: httpx.Response = await self._client.get(url, params=params)
+        response.raise_for_status()
+        response_dict: Dict[str, Any] = response.json()
+
+        return SttSessionStatus(**response_dict)
 
     def _prepare_data(self, data: Dict[str, Any], in_cid: int | None = None ) -> Tuple[List[ResultSegment], List[Speaker]]:
         result: List[ResultSegment] = []
@@ -302,7 +314,8 @@ class NetClient:
         self._result_receiver = None
 
     def add_result(self, data: Dict[str, Any]) ->None:
-        assert self.on_results
+        if not self.on_results:
+            return
 
         cid = int(data["cid"])
         result_data: Dict[str, Any] = data["data"]
@@ -321,7 +334,7 @@ class NetClient:
             asyncio.create_task(self._stop_get_results())
 
     async def load_results(self) -> None:
-        assert self.on_results
+        if not self.on_results: return        
         assert self.current_sid
 
         stts_results, stts_spks = await self.get_session_data(self.current_sid)

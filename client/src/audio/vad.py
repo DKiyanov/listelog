@@ -3,20 +3,22 @@ import numpy as np
 import onnxruntime as ort # версия обязательно 1.20.0 - более свежие приводят к ошибкам на относительно старых компах/системах
 
 
+
 class VADProcessor:
     """Класс для потокового обнаружения голоса (VAD) с использованием Silero-VAD V6.2+ через ONNX."""
+    _vad_session: ort.InferenceSession | None = None
 
-    def __init__(self, model_path: str, threshold: float = 0.5, sample_rate: int = 16000) -> None:
-        """
-        Инициализация сессии ONNX и внутренних состояний модели.
+    # Константы геометрии тензоров Silero V6.2
+    _context_size: int = 64
+    _frame_size: int = 512  # 32 мс
+    _sample_rate: int = 16000
+    _state_shape: tuple[int, int, int] = (2, 1, 128)
+    _sr_tensor: np.ndarray = np.array([_sample_rate], dtype=np.int64)
 
-        Args:
-            model_path: Путь к файлу модели ONNX.
-            threshold: Порог вероятности, выше которого сегмент считается голосом.
-        """
-        self.threshold: float = threshold
-        self.sample_rate: int = sample_rate
-        
+    @staticmethod
+    def init(model_path: str) -> None:
+        if VADProcessor._vad_session: return
+
         # Оптимальные настройки сессии для продуктивного использования на CPU
         opts: ort.SessionOptions = ort.SessionOptions()
         opts.inter_op_num_threads = 1
@@ -24,21 +26,17 @@ class VADProcessor:
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
         # Инициализация ONNX Runtime сессии
-        self._session: ort.InferenceSession = ort.InferenceSession(
+        VADProcessor._vad_session = ort.InferenceSession(
             model_path, sess_options=opts, providers=["CPUExecutionProvider"]
         )
 
-        # Константы геометрии тензоров Silero V6.2
-        self._context_size: int = 64
-        self.frame_size: int = 512  # 32 мс при 16kHz
-        self._state_shape: tuple[int, int, int] = (2, 1, 128)
-
+    def __init__(self) -> None:
         # Хранилища для состояний между вызовами чанков
-        self._state: np.ndarray = np.zeros(self._state_shape, dtype=np.float32)
-        self._context: np.ndarray = np.zeros(self._context_size, dtype=np.float32)
-        self._sr_tensor: np.ndarray = np.array([self.sample_rate], dtype=np.int64)
+        self._state: np.ndarray = np.zeros(VADProcessor._state_shape, dtype=np.float32)
+        self._context: np.ndarray = np.zeros(VADProcessor._context_size, dtype=np.float32)
 
-    def voice_detected(self, chunk: np.ndarray) -> tuple[bool, float] :
+
+    def is_voice(self, chunk: np.ndarray) -> float :
         """
         Определяет наличие голоса в переданном чанке аудио.
 
@@ -46,13 +44,10 @@ class VADProcessor:
             chunk: На вход ожидается одномерный массив (512 сэмплов, 16кГц, моно, float32).
 
         Returns:
-            True, если вероятность голоса >= threshold, иначе False.
-        """
+            Вероятность наличия голоса
+        """       
 
-        # Автоусиление 
-        max_vol = np.max(np.abs(chunk))
-        if 0.001 < max_vol < 0.1:
-            chunk = chunk * (0.2 / max_vol)        
+        assert VADProcessor._vad_session
 
         # Формирование входного вектора с учетом контекста (64 сэмпла истории + 512 текущих = 576)
         # Архитектура V6 требует форму [1, 576]
@@ -63,11 +58,11 @@ class VADProcessor:
         inputs: dict[str, np.ndarray] = {
             "input": input_tensor,
             "state": self._state,
-            "sr": self._sr_tensor
+            "sr": VADProcessor._sr_tensor
         }
 
         # Выполнение инференса
-        raw_outputs = self._session.run(None, inputs)  
+        raw_outputs = VADProcessor._vad_session.run(None, inputs)  
         outputs: Sequence[np.ndarray] = cast(Sequence[np.ndarray], raw_outputs)
         
         out_probability: np.ndarray = outputs[0]  # Форма: [1, 1]
@@ -75,14 +70,14 @@ class VADProcessor:
 
         # Обновление внутренних состояний для следующей итерации
         self._state = new_state
-        self._context = chunk[-self._context_size :].copy()
+        self._context = chunk[-VADProcessor._context_size :].copy()
 
         # Извлечение скалярного значения вероятности
         speech_prob: float = float(out_probability[0, 0])
 
-        return speech_prob >= self.threshold, speech_prob
+        return speech_prob
 
     def reset_states(self) -> None:
         """Сброс контекста и скрытых состояний LSTM между независимыми аудио-потоками."""
-        self._state = np.zeros(self._state_shape, dtype=np.float32)
-        self._context = np.zeros(self._context_size, dtype=np.float32)
+        self._state = np.zeros(VADProcessor._state_shape, dtype=np.float32)
+        self._context = np.zeros(VADProcessor._context_size, dtype=np.float32)

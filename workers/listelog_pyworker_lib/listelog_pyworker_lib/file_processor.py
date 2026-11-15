@@ -63,8 +63,11 @@ class Task:
     def save_sttd_result(self, result: List[RecognitionResult], spks: List[RecognitiontSpeaker]) -> None:
             assert self.session_dir is not None
 
-            if not result:
-                result.append(self._get_empty_result())            
+            result_list = list(result)
+            spks_list = list(spks)
+
+            if not result_list:
+                result_list.append(self._get_empty_result())            
 
             session_result_dir = self.session_dir / "result"
             session_result_dir.mkdir(exist_ok=True)
@@ -72,8 +75,8 @@ class Task:
             chunk_result_path = session_result_dir / f"{self.cid}_result.json"
             result_path = self.session_dir / "result.json"
 
-            spks_dict = [asdict(item) for item in spks]
-            results_dict = [asdict(item) for item in result]
+            spks_dict = [asdict(item) for item in spks_list]
+            results_dict = [asdict(item) for item in result_list]
 
             result_dict_ok: dict[str, Any] = {
                 "spks" : spks_dict,
@@ -88,13 +91,14 @@ class Task:
                 item["cid"] = self.cid
 
             # Добавляем в файл результатов
-            dump_result = ",\n".join(json.dumps(item, ensure_ascii=False, indent=4) for item in results_dict)             
+            if results_dict:
+                dump_result = ",\n".join(json.dumps(item, ensure_ascii=False, indent=4) for item in results_dict)             
 
-            if result_path.exists():
-                dump_result = ",\n" + dump_result
+                if result_path.exists():
+                    dump_result = ",\n" + dump_result
 
-            with open(result_path, 'a', encoding='utf-8') as f:
-                f.write(dump_result)           
+                with open(result_path, 'a', encoding='utf-8') as f:
+                    f.write(dump_result)           
 
 class FileProcessor(ABC):
 

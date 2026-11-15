@@ -20,19 +20,15 @@ if sys.platform == "win32":
     ffmpeg._run.run_async = patched_run_async
 
 # Определение типа для колбэка
-FileChunkCallback = Callable[[int, np.ndarray, int], None]
+FileChunkCallback = Callable[[int, np.ndarray, int], Coroutine[Any, Any, None]]
 FileReadStartCallback = Callable[[int, int], None]
 
 class FileReader:
     def __init__(
         self, 
-        on_start: FileReadStartCallback, 
         on_chunk: FileChunkCallback,
-        on_finish: SimpleCallBack
     ) -> None:
-        self.on_start: FileReadStartCallback = on_start
         self.on_chunk: FileChunkCallback = on_chunk
-        self.on_finish: SimpleCallBack = on_finish
 
         self._sample_rate: int = ORIG_SAMPLE_RATE
         self._chunk_size: int = ORIG_RAW_CHANK_SIZE
@@ -40,7 +36,7 @@ class FileReader:
 
         self._is_reading_on: bool = False
 
-    def _get_file_info(self, file_path: str) -> tuple[int, int]:
+    def _get_file_info(self, file_path: str):
         """Получает длительность файла в мс и количество аудиоканалов."""
         probe: dict = ffmpeg.probe(file_path)
         audio_stream: Optional[dict] = next(
@@ -51,18 +47,13 @@ class FileReader:
         if not audio_stream:
             raise ValueError("Аудиопоток не найден в указанном файле.")
             
-        duration: float = float(probe.get("format", {}).get("duration", 0.0))
-        channels: int = int(audio_stream.get("channels", 2))  # по умолчанию стерео
-        
-        return channels, int(duration * 1000)
+        self.duration_sec: float = float(probe.get("format", {}).get("duration", 0.0))
+        self.channels_count: int = int(audio_stream.get("channels", 2))  # по умолчанию стерео
 
-    def _process_file_sync(self, file_path: str, in_mono: bool, loop: asyncio.AbstractEventLoop) -> None:
+        self.out_channels_count: int = 1 if self.in_mono else self.channels_count
+
+    def _process_file_sync(self, loop: asyncio.AbstractEventLoop) -> None:
         """Синхронный метод чтения и генерации чанков (выполняется в потоке)."""     
-        channels_count, duration = self._get_file_info(file_path)
-        
-        # Определяем итоговое количество каналов на выходе ffmpeg
-        output_channels: int = 1 if in_mono else channels_count
-        loop.call_soon_threadsafe(self.on_start, output_channels, duration)
 
         # Формируем аргументы для output. Если in_mono=True, добавляем ac=1
         output_kwargs = {
@@ -70,27 +61,34 @@ class FileReader:
             "acodec": "pcm_f32le",
             "ar": str(self._sample_rate)
         }
-        if in_mono:
+        if self.in_mono:
             output_kwargs["ac"] = "1" # Force ffmpeg to downmix to mono
 
         # Настройка ffmpeg: извлечение аудио, ресемплинг, формат f32le
         process = (
             ffmpeg
-            .input(file_path)
+            .input(self.file_path)
             .output("pipe:", **output_kwargs)
-            .run_async(pipe_stdout=True, pipe_stderr=subprocess.DEVNULL)
+            .global_args("-nostdin", "-loglevel", "error")
+            .run_async(pipe_stdout=True) # , pipe_stderr=subprocess.DEVNULL
         )
 
         # Размер одного чанка в байтах для одного канала
         channel_chunk_bytes: int = self._chunk_size * self._bytes_per_sample
         # Общий размер считываемого блока (зависит от выходного количества каналов)
-        frame_bytes: int = channel_chunk_bytes * output_channels
+        frame_bytes: int = channel_chunk_bytes * self.out_channels_count
+
+        chunk_num: int = 0
+        limit_chunk_num: int = int((self.duration_sec * self._sample_rate) // self._chunk_size)
         
         sample_count: int = 0
         self._is_reading_on = True
 
         try:
             while self._is_reading_on:
+                if chunk_num >= limit_chunk_num:
+                    print("file read last chunk")
+
                 in_bytes: bytes = process.stdout.read(frame_bytes)
                 if not in_bytes:
                     break
@@ -103,27 +101,45 @@ class FileReader:
                 raw_data: np.ndarray = np.frombuffer(in_bytes, dtype=np.float32)
                 
                 # Разделяем каналы (пересобираем массив в матрицу [сэмплы, выходные_каналы])
-                interleaved_data: np.ndarray = raw_data.reshape(-1, output_channels)
+                interleaved_data: np.ndarray = raw_data.reshape(-1, self.out_channels_count)
                 
                 # Текущее время чанка от начала файла в нано-секундах
                 mtime: int = int((sample_count / self._sample_rate) * 1000000000)
 
                 # Отправляем данные в колбэк
-                for channel_idx in range(output_channels):
+                for channel_idx in range(self.out_channels_count):
                     channel_chunk: np.ndarray = interleaved_data[:, channel_idx]
-                    loop.call_soon_threadsafe(self.on_chunk, channel_idx, channel_chunk, mtime)
+                    future = asyncio.run_coroutine_threadsafe(self.on_chunk(channel_idx, channel_chunk, mtime), loop)
+                    future.result()
 
                 sample_count += self._chunk_size
+                chunk_num += 1
         finally:
             process.stdout.close()
-            process.wait()
-            loop.call_soon_threadsafe(self.on_finish)
 
-    def read_file(self, file_path: str, in_mono:bool) -> None:
-        """Асинхронный запуск чтения файла без блокировки GUI."""        
-        loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
+            if process.stdin:
+                process.stdin.close()
+            if process.stderr:
+                process.stderr.close()
+
+            try:
+                process.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            print("read file finished")
+
+    def set_file(self, file_path: str, in_mono:bool) -> None:
+        self.file_path = file_path
+        self.in_mono = in_mono
+        self._get_file_info(file_path)
+
+    def start_read(self) -> asyncio.Future[Any]:
+        """Асинхронный запуск чтения файла без блокировки GUI."""     
         # Запускаем тяжелую операцию декодирования в отдельном потоке
-        loop.run_in_executor(None, self._process_file_sync, file_path, in_mono, loop)
+        loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
+        future = loop.run_in_executor(None, self._process_file_sync, loop)
+        return future
 
     def cancel_reading(self)->None:
         self._is_reading_on = False

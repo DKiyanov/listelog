@@ -1,6 +1,7 @@
 import keyring
 import keyring.errors
 
+from src.init import *
 from src.net.net_client import *
 from src.translate import *
 

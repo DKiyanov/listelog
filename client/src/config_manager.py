@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from src.models import *
+from src.init import *
 
 class ConfigManager:
     """Класс для управления конфигурационным файлом приложения."""

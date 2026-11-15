@@ -10,6 +10,12 @@ class SttSession:
     duration: int # Длительность в минтах
 
 @dataclass(frozen=True)
+class SttSessionStatus:
+    sid: str        # ИД сессии
+    is_closed: bool # сессия закрыта
+    percent: int    # процент обработки
+
+@dataclass(frozen=True)
 class SttSegment:
     cid: int        # Ид блока контента
     tss: int        # Смещение начала (мс) от начала записи/сессии

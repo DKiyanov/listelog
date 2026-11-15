@@ -231,6 +231,8 @@ async def close_session(
     """Закрывает сессию"""
     _check_sid_user(sid, user)
     user_manager.user_log_add(user, "CLOSE", str(sid))
+    closed_mark_file = _SESSIONS_DIR / str(sid) / "closed"
+    closed_mark_file.touch()
     return {"status": f"session closed"}
 
         
@@ -336,6 +338,17 @@ async def get_stt_ses_data(
 
     results, spks = stt_session_reader.get_session_data(str(sid))
     return SttSessionData(results=results, spks=spks)
+
+@_app.get("/get-stt-ses-status", response_model=SttSessionStatus, status_code=status.HTTP_200_OK)
+async def get_stt_ses_status(
+    sid: int = Query(...), 
+    user: str = Depends(verify_token)
+) -> SttSessionStatus:
+    """Возвращает статус сессии"""
+    _check_sid_user(sid, user)
+
+    status = stt_session_reader.get_session_status(str(sid))
+    return status
 
 @_app.get("/get-speakers", response_model=List[str], status_code=status.HTTP_200_OK)
 async def get_speakers(

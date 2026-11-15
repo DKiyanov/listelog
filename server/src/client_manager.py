@@ -33,3 +33,17 @@ class ClientManager:
             "cid": int(cid),
             "data": result_data
         })
+
+    async def send_finished(self, sid: str):
+        """Отправляет результат клиенту, если он подключен."""
+        print("send finished to client")
+        ws = self.clients.get(sid)
+        if not ws:
+            return
+        finished_mark_file = self.sessions_dir / sid / "finished"
+        if not finished_mark_file.exists():
+            return
+        await ws.send_json({
+            "type": "finished",
+            "sid": sid
+        })        

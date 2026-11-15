@@ -2,26 +2,26 @@ from dataclasses import dataclass
 from typing import Callable, List
 import numpy as np
 
-vad_model_path = "./models/silero_vad.onnx"
-denoise_model_path = "./models/deepfilter-stream/dfn3-512-v1/denoiser_model.onnx"
-
-@dataclass
+@dataclass(frozen=True)
 class RawChunk:
     source_id: int  # Идентификатор источника
     mtime: int   # время time.monotonic()
     raw_data: np.ndarray  # PCM-данные в формате float32 numpy array
 
-@dataclass
-class VoiceChunk:
-    """Накопленный сырой аудио-блок с голосом"""
+@dataclass(frozen=True)
+class ExtChunk:
+    chunk: np.ndarray
+    vadr: float # Результат VAD
+
+@dataclass(frozen=True)
+class Fragment:
     source_id: int  # Идентификатор источника
     ts_start: int   # время в миллисекундах от начала записи
     ts_end: int     # время конца в миллисекундах от начала записи
-    is_bad: bool    # очень плохое соотношение голос/шум - сохранить но не транскрибировать
-    raw_data: np.ndarray  # PCM-данные в формате float32 numpy array
+    chunks: list[ExtChunk] 
 
-@dataclass
-class EncodedChunk:
+@dataclass(frozen=True)
+class EncodedFragment:
     """Подготовленный к сохранению/отправке блок"""
     source_id: int  # Идентификатор источника
     ts_start: int   # время в миллисекундах от начала записи
@@ -51,6 +51,12 @@ class SttSession:
     date: str     # Дата_время формат YYYYMMDDHHmm 
     duration: int # Длительность в минтах    
 
+@dataclass(frozen=True)
+class SttSessionStatus:
+    sid: str        # ИД сессии
+    is_closed: bool # сессия заккрыта
+    percent: int    # процент обработки
+
 @dataclass
 class Speaker: # совпадает по структуре с worker.RecognitiontSpeaker
     spkid: str      # ID спикера <source_id>/<spiker_num>
@@ -59,8 +65,8 @@ class Speaker: # совпадает по структуре с worker.Recognitio
     is_good: bool   # есть как минимум два достаточно длинных сегмента
     is_bad: bool    # все сегменты очень короткие    
 
-OnRawChunk = Callable[[RawChunk], None]
-OnVoiceChunk = Callable[[VoiceChunk], None]
+OnRawFragment = Callable[[RawChunk], None]
+OnFragment = Callable[[Fragment], None]
 SimpleCallBack = Callable[[], None]
 OnResult = Callable[[List[ResultSegment], List[Speaker]], None]
 OnSelectSttSession = Callable[[SttSession], None]

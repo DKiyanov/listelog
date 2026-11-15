@@ -13,9 +13,12 @@ class Config:
     main_url: str
     token: str
 
-    data_dir: Path
-    info_dir: Path
-    scan_interval: float
+    scan_dir: str # для docker/linux - это каталог в который нужно подкаталогами смонтировать сканируемые каталоги
+    scan_dirs_file: str # путь к файлы со списком сканируемых каталгов  
+
+    work_dir: str # путь к рабочему каталогу
+
+    scan_interval: float # интервал сканирования в минутах
 
     from_env: bool
 
@@ -114,3 +117,14 @@ class Config:
         elif field.type is float:
             object.__setattr__(self, field.name, 0.0) 
 
+def get_scan_dir_list(config: Config) -> list[str]:
+    result: list[str] = []
+
+    if config.scan_dirs_file and Path(config.scan_dirs_file).exists():
+        with open(config.scan_dirs_file, "r", encoding="utf-8") as file:
+            result = file.read().splitlines()        
+
+    if config.scan_dir:
+        result.append(str(config.scan_dir))
+
+    return result

@@ -3,9 +3,11 @@ import asyncio
 from typing import Optional, List
 import subprocess
 
+from src.audio.vad import VADProcessor
 import flet as ft
 
 from src.models import *
+from src.init import *
 from src.config_manager import *
 from src.audio.audio_queue import *
 from src.file.file_saver import *
@@ -19,7 +21,6 @@ from src.ui.file_upload_ui import *
 from src.ui.device_row_ui import *
 from src.ui.result_ui import *
 from src.ui.input_text_dlg_ui import *
-from src.audio.noice_reductor import *
 
 from src.utils import *
 from src.translate import lcvt
@@ -55,9 +56,11 @@ class AudioRecorderApp:
         self.recording_source_ids = set()
 
         # Бизнес-компоненты
-        self.config_manager: ConfigManager = ConfigManager()
-        self.encoder: Encoder = Encoder(output_format="ogg")
-        self.proc_queue: ProcQueue = ProcQueue(encoder=self.encoder, on_packet_ready=self._on_encoded_chunk)
+        self.config_manager = ConfigManager()
+        VADProcessor.init(model_path=get_work_path(vad_model_path))
+        self.denoiser = Denoiser(get_work_path(denoiser_model_path))
+        self.encoder = Encoder(output_format="ogg")
+        self.proc_queue = ProcQueue(denoiser=self.denoiser, encoder=self.encoder, on_packet_ready=self._on_encoded_chunk)
         self.file_saver = FileSaver()
         self.net_client = NetClient()
         self.net_client.set_callbacks(self.on_send, self.on_results)
@@ -72,18 +75,14 @@ class AudioRecorderApp:
 
         self.settings_dialog: Optional[SettingsDialog] = None
 
-        self.denoiser = NoiseReductionWorker(get_work_path("assets/deepfilter-stream/dfn3-512-v1/denoiser_model.onnx"), self._on_voice_chunk)
-        self.denoiser.start()
-
         self.dev_rows: list[DeviceRow] = []
         self.dev_rows.append(
             DeviceRow(
                 page, 
-                self.denoiser,
                 DeviceType.MICROPHONE, 
                 1, 
                 self._on_raw_chank, 
-                self._on_voice_chunk, 
+                self._on_fragment, 
                 self._on_row_change, 
                 self.on_mic_add_click,
                 self.dev_rows
@@ -91,19 +90,18 @@ class AudioRecorderApp:
         )
         self.dev_rows.append(
             DeviceRow(
-                page, 
-                self.denoiser,
+                page,
                 DeviceType.LOOPBACK, 
                 100, 
                 self._on_raw_chank, 
-                self._on_voice_chunk, 
+                self._on_fragment, 
                 self._on_row_change, 
                 None,
                 self.dev_rows
             )            
         )
 
-        self.file_upload_row = FileUploadRow(self.page, self.denoiser, self._on_file_upload_start, self._on_voice_chunk, self._on_file_finish)
+        self.file_upload_row = FileUploadRow(self.page, self._on_file_upload_start, self._on_fragment)
 
         # GUI элементы
         self.main_status: ft.Text = ft.Text("", color=ft.Colors.BLUE, text_align=ft.TextAlign.CENTER)
@@ -356,12 +354,12 @@ class AudioRecorderApp:
         if self.is_recording_on and chunk.source_id in self.recording_source_ids:
             asyncio.create_task(self.file_saver.add_chunk(chunk))
 
-    def _on_voice_chunk(self, chunk: VoiceChunk) -> None:
-        """Callback: Буфер накопил и отдал VoiceChunk"""
+    def _on_fragment(self, chunk: Fragment) -> None:
+        """Callback: Буфер накопил и отдал Fragment"""
         if self.is_recording_on and chunk.source_id in self.recording_source_ids and not self.is_pause_on:            
             asyncio.create_task(self.proc_queue.put(chunk))
 
-    async def _on_encoded_chunk(self, packet: EncodedChunk) -> None:
+    async def _on_encoded_chunk(self, packet: EncodedFragment) -> None:
         """Callback: Пакет сжат в OGG и готов к обработке"""
         source = next((source for source in self.recording_source_list if source.source_id == packet.source_id), None)
         if source == None: return
@@ -381,7 +379,7 @@ class AudioRecorderApp:
         self.recording_source_list.clear()
 
         for channel in range(self.file_upload_row.channels_count):
-            self.recording_source_list.append(RecordSourceInfo(channel, self.file_upload_row.chk_diarize.value==True))
+            self.recording_source_list.append(RecordSourceInfo(channel, self.file_upload_row.diarize))
 
         if not self.recording_source_list:
             return
@@ -389,16 +387,10 @@ class AudioRecorderApp:
         if self.title.value != "":
             title = self.title.value
         else:
-            file_path = self.file_upload_row.file_path_input.value
-            title = Path(file_path).name
+            title = Path(self.file_upload_row.file_path).name
         
         asyncio.create_task(self.start_recording_ex(True, True, title))
       
-
-    def _on_file_finish(self) -> None:
-        # Вызывается при получении всех результатов STT обработки        
-        asyncio.create_task(self.stop_recording())
-
     def _check_net_connection(self) -> bool:
         if self.net_client.is_login_ok:
             return True
@@ -475,6 +467,10 @@ class AudioRecorderApp:
         self.is_recording_on = True
         self.is_pause_on = False
         self.set_view_status()
+
+        if self.is_from_file:
+            await self.file_upload_row.start_read()
+            await self.stop_recording()
 
     def pause_recording(self) -> None:
         self.is_pause_on = not self.is_pause_on
@@ -600,10 +596,9 @@ class AudioRecorderApp:
         self.dev_rows.append(
             DeviceRow(
                 self.page, 
-                self.denoiser,
                 DeviceType.MICROPHONE, mic_src_id, 
                 self._on_raw_chank, 
-                self._on_voice_chunk, 
+                self._on_fragment, 
                 self._on_row_change, 
                 None,
                 self.dev_rows

@@ -57,5 +57,8 @@ class WorkersManager:
             self.active_workers.remove(worker)
 
     async def _task_completion(self, sid: str, cid: str, file: str):
-        self.dispatcher.task_completion(sid, cid, file)
+        finished = self.dispatcher.task_completion(sid, cid, file)
         await self.client_manager.send_result(sid, cid)
+        if finished:
+            await self.client_manager.send_finished(sid)
+

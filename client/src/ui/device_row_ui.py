@@ -4,22 +4,21 @@ import flet as ft
 
 from pathlib import Path
 
+from src.init import *
 from src.audio.audio_queue import *
 from src.audio.audio_device import *
 from src.utils import *
 from src.audio.play_sound import *
-from src.audio.noice_reductor import *
 from src.translate import lcvt
 
 class DeviceRow:
     def __init__(
             self,
             page: ft.Page,
-            denoiser: NoiseReductionWorker | None,
             device_type: DeviceType,
             source_id: int,
             on_raw_chunk: OnRawChunk,
-            on_voice_chunk: OnVoiceChunk,
+            on_fragment: OnFragment,
             on_change: Callable[[DeviceRow], None],
             on_mic_add: Optional[SimpleCallBack],
             dev_rows: List[DeviceRow]
@@ -31,7 +30,7 @@ class DeviceRow:
         self.on_change: Callable[[DeviceRow], None] = on_change
         self.dev_rows: List[DeviceRow] = dev_rows
 
-        self.buffer: VoiceBuffer = VoiceBuffer(source_id = self.source_id, on_chunk = on_voice_chunk, denoiser = denoiser)
+        self.buffer: VoiceBuffer = VoiceBuffer(source_id = self.source_id, on_fragment = on_fragment)
         self.audio_source: Optional[AudioSource] = None
 
         self.is_recording = False
@@ -148,19 +147,19 @@ class DeviceRow:
             with open(self.default_path, 'w', encoding='utf-8') as file:
                 file.write(self.dd_devices.text or "")        
 
-    def on_chunk(self, mtime: int, data: np.ndarray) -> None:
-        self.on_raw_chunk(RawChunk(self.source_id, mtime, data))
+    def on_chunk(self, mtime: int, chunk: np.ndarray) -> None:
+        self.on_raw_chunk(RawChunk(self.source_id, mtime, chunk))
 
         is_speach: bool = False
         rms: float = 0.0
 
         if self.is_recording:
             # Если включена запись — отправляем данные в буфер:
-            is_speach, rms = self.buffer.add_samples(data, mtime)
+            is_speach = self.buffer.add_samples(chunk, mtime)
         else:
-            is_speach, rms = self.buffer.is_voice(data)
+            is_speach = self.buffer.is_voice(chunk)
 
-        rms: float = self.calc_rms(data)
+        rms: float = calc_chunk_rms(chunk)
         gain: float = 1
 
         # Рассчитываем gain только во время речи, 
@@ -192,12 +191,6 @@ class DeviceRow:
             self.current_gain += (ideal_gain - self.current_gain) * self.decay_speed
 
         return self.current_gain
-
-    @staticmethod
-    def calc_rms(data: np.ndarray) -> float:
-        # Расчет интегральной громкости (RMS) для индикатора активности
-        rms: float = float(np.sqrt(np.mean(data ** 2)))
-        return rms
 
     def _on_change_audio_devices_list(self, devices: List[AudioDevice]) -> None:
         self._refresh_audio_devices(devices)
@@ -254,7 +247,7 @@ class DeviceRow:
         if not self.is_recording:
             return
 
-        self.buffer.flush()
+        self.buffer.stop_recording()
 
         self.is_recording = False
 

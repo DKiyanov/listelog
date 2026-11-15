@@ -1,44 +1,43 @@
-from pathlib import Path
-
 from src.config import *
-from src.scan_folders import *
-from src.client_main import *
-from src.file_scanner import *
+from src.audio_sender import *
+from src.file_processor import *
+from src.file_scaner import *
+from src.result_waiter import *
 
-# ---------------------------------------------------------------------------
-# Точка входа
-# ---------------------------------------------------------------------------
 async def main() -> None:
     config = Config()
-    folders = get_scan_folders()
-    ensure_dirs(config)
+    scan_dir_list = get_scan_dir_list(config)
+
     net_client = NetClient()
     net_client.check_token(config.main_url, "file-server", config.token)
+
     sender = AudioSender(net_client)
 
-    async def send_audio(file_path: Path, title: str) -> str:
-        save_audio_path = file_path.parent.parent / SUBDIRS[STATUS_PROCESSING] / f"{file_path.stem}.ogg"
-        result = await sender.file_upload(str(file_path), title, str(save_audio_path), True, True)
-        return result
+    work_dir = Path(config.work_dir)
 
-    server = FileServer(config, folders, send_audio)
+    temp_dir = work_dir / "temp"
+    temp_dir.mkdir(exist_ok=True)
 
-    loop = asyncio.get_running_loop()
-    import signal
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, server.stop)
-        except NotImplementedError:
-            pass
+    wait_result_file = work_dir / "wait_result.txt"
+    proced_file = work_dir / "proced_file.txt"
 
-    log.info("Запуск сервера. data_dir=%s, info_dir=%s, interval=%s мин",
-             config.data_dir, config.info_dir, config.scan_interval)
-    await server.run()
-    log.info("Сервер остановлен")
+    shared_lock = asyncio.Lock()
 
+    file_processor = FileProcessor(temp_dir, wait_result_file, sender, shared_lock)
+
+    async def on_proc_file(file_path: Path) -> None:
+        await file_processor.proc_file(file_path, True, True)
+
+    interval = int(config.scan_interval * 60)
+    
+    scanner = FileScanner(scan_dir_list, proced_file, interval, on_proc_file)
+
+    result_waiter = ResultWaiter(wait_result_file, net_client, interval, shared_lock)
+
+    await asyncio.gather(
+        scanner.start(),
+        result_waiter.start(),
+    )    
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    asyncio.run(main())

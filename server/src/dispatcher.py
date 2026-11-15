@@ -57,7 +57,7 @@ class TaskDispatcher:
             # Ищем воркера с совпадающим вебсокетом и удаляем его
             index = next((i for i, w in enumerate(self.workers) if w.ws == ws), -1)
             if index >= 0:
-                worker = self.ready_workers[index]
+                worker = self.workers[index]
                 if self.work_type_stt in worker.work_types:
                     self.stt_unready_time = time.perf_counter()
 
@@ -162,11 +162,26 @@ class TaskDispatcher:
                         next=""
                     ))
 
-    def task_completion(self, sid: str, cid: str, file: str):
+    def task_completion(self, sid: str, cid: str, file: str) -> bool:
+        finished = False
         complete_file_path = Path(self.config.audio_data_dir) / "complete" / file
-        session_proc_dir = Path(self.config.sessions_dir) / sid / "proc"
+        session_dir = Path(self.config.sessions_dir) / sid
+        session_proc_dir = session_dir / "proc"
         session_proc_dir.mkdir(exist_ok=True)
-        complete_file_path.rename(session_proc_dir / file)        
+        complete_file_path.rename(session_proc_dir / file)
+
+        closed_mark_file = session_dir / "closed"
+        if closed_mark_file.exists():
+            info_dir = session_dir / "info"
+            result_dir = session_dir / "result"
+            info_count   = len(os.listdir(info_dir))
+            result_count = len(os.listdir(result_dir))
+            if result_count == info_count:
+                finished = True
+                finished_mark_file = session_dir / "finished"
+                finished_mark_file.touch()
+        
+        return finished
 
     async def start(self)->None:
         await self._fill_initial_tasks(self.tasks_dir) 

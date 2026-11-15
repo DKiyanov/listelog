@@ -14,6 +14,7 @@ from src.translate import lcvt
 from src.ui.llm.llm_text_processor import *
 from src.ui.result_save_dlg_ui import *
 from src.ui.input_text_dlg_ui import *
+from src.result_prepare import *
 
 _RV: 'ResultView'
 
@@ -199,55 +200,10 @@ class ResultView:
         
         self.result_list.extend(results)
         self.result_list.sort(key=lambda x: x.tss)
+
+        prepare_speakers(self.result_list, spks, self.spks, self.spknmap)
         
-        for spk in spks:
-            self.spks[spk.spkid] = spk
-
-        for result in results:
-            if not self.spks.get(result.spkid):
-                self.spks[result.spkid] = Speaker(
-                    spkid=result.spkid,
-                    title=self.spk_illegible_title if result.spkid.endswith(self.spknum_illegible) else result.spkid,
-                    ref_spkid="",
-                    is_good=False,
-                    is_bad=True
-                )
-
-        self._refresh_speaker_names()
-
-        await self.refresh_result(True)   
-
-    def _refresh_speaker_names(self) ->None:
-        # Заполняем имена спикеров
-        self.spknmap.clear()
-
-        spks_values = self.spks.values()
-
-        for spk in spks_values:
-            if spk.title != "" and spk.ref_spkid != "" and spk.ref_spkid != spk.spkid:
-                title= self.spknmap.get(spk.ref_spkid)
-                if title is None:
-                    self.spknmap[spk.ref_spkid] = spk.title
-                elif spk.title != title:
-                    self.spknmap[spk.ref_spkid] = "*"
-
-        for spk in spks_values:
-            if spk.title != "":                
-                self.spknmap[spk.spkid] = spk.title
-
-        for spk in spks_values:
-            if spk.title == "" and spk.ref_spkid != "" and spk.ref_spkid != spk.spkid:
-                title= self.spknmap.get(spk.ref_spkid)
-                if title is not None:
-                    self.spknmap[spk.spkid] = title
-
-        for spk in self.spks.values():
-            if spk.spkid not in self.spknmap:
-                self.spknmap[spk.spkid] = spk.spkid
-
-        for spkid, title in self.spknmap.items():
-            if title == "*":
-                self.spknmap[spkid] = spkid           
+        await self.refresh_result(True)            
 
     async def refresh_result(self, scroll: bool):
         self.lv.auto_scroll=scroll

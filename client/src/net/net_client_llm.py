@@ -1,6 +1,7 @@
 from dataclasses import asdict
 import keyring
 
+from src.init import *
 from src.net.net_client import *
 from src.ui.llm.llm_models import *
 from src.translate import *

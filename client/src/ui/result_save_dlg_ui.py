@@ -1,74 +1,11 @@
 import flet as ft
 import asyncio
-from enum import StrEnum
-from dataclasses import asdict
-import json
+from pathlib import Path
 
 from src.models import *
 from src.translate import lcvt
 
-spk_symbol = "🧑"
-
-class TextFormat(StrEnum):
-    subtitle  = "srt"
-    text      = "txt"
-    table_csv = "csv"
-    table_tsv = "tsv"
-    json      = "json"
-
-def get_subtitle_time_str(pos: int) -> str:
-    total_seconds = pos // 1000
-    milliseconds = pos % 1000
-    
-    hours = total_seconds // 3600
-    minutes = (total_seconds % 3600) // 60
-    seconds = total_seconds % 60
-    
-    # Собираем строку с ведущими нулями
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"    
-
-def result_get_text(text_format: TextFormat, result_list: List[ResultSegment], spknmap: dict[str, str])->str:
-    text: str = ""
-    spk_name: str = "-"
-
-    if text_format == TextFormat.text:
-        for item in result_list:
-            item_spk_name = spknmap[item.spkid]
-
-            if spk_name != item_spk_name:
-                spk_name = item_spk_name
-                text += f"\n {spk_symbol} {spk_name}"
-
-            text += f"\n{item.text}"
-    
-    if text_format == TextFormat.subtitle:
-        for index, item in enumerate(result_list, start=1):
-            text += f"\n{index}"
-            text += f"\n{get_subtitle_time_str(item.tss)} --> {get_subtitle_time_str(item.tse)}"
-
-            item_spk_name = spknmap[item.spkid].replace(" ", "_")
-
-            if spk_name != item_spk_name:
-                spk_name = item_spk_name
-                text += f"\n{spk_symbol}{spk_name} {item.text}"
-            else:
-                text += f"\n{item.text}"
-
-            text += f"\n"
-
-    if text_format == TextFormat.table_csv:
-        for index, item in enumerate(result_list, start=1):
-            text += f"\n{index},{item.spkid},{item.tss},{item.tse},{item.text.replace(',', ' ')}"
-
-    if text_format == TextFormat.table_tsv:
-        for index, item in enumerate(result_list, start=1):
-            text += f"\n{index}\t{item.spkid}\t{item.tss}\t{item.tse}\t{item.text}"
-            
-    if text_format == TextFormat.json:
-        dicts = [asdict(result) for result in result_list]
-        text = json.dumps(dicts, indent=4, ensure_ascii=False)
-
-    return text
+from src.result_prepare import *
 
 def result_save_dlg(
     page: ft.Page, 

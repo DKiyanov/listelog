@@ -115,3 +115,27 @@ class SttSessionReader:
                     is_bad    = item["is_bad"],
                 )                    
             )        
+
+    def get_session_status(self, sid: str) -> SttSessionStatus:
+        session_dir = Path(self.config.sessions_dir) / sid
+        finished_mark_file = session_dir / "finished"
+
+        if finished_mark_file.exists():
+            is_closed = True
+            percent = 100
+        else:
+            closed_mark_file = session_dir / "closed"
+            is_closed = closed_mark_file.exists()
+            info_dir = session_dir / "info"
+            result_dir = session_dir / "result"
+            info_count   = len(os.listdir(info_dir))
+            result_count = len(os.listdir(result_dir))
+            percent = result_count * 100 // info_count 
+
+        status = SttSessionStatus(
+            sid       = sid,
+            is_closed = is_closed,
+            percent   = percent
+        )
+
+        return status
