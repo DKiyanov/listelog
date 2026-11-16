@@ -10,6 +10,7 @@ Dockerfile
 *.pyc
 
 .venv/
+.vscode/
 .git/
 __pycache__/
 models/

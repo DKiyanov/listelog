@@ -1,0 +1,26 @@
+version: '3.8'
+
+name: listelog
+
+services:
+  file_server:
+    build: .
+    
+    image: dkiyanov/listelog-file_server:latest
+    container_name: listelog-file_server
+    restart: unless-stopped
+    
+    volumes:
+      - ${HOST_SCAN_DIR}:/data/scan
+      - ${HOST_WORK_DIR}:/data/work
+    env_file:
+      - .env
+    environment:
+      # Перенаправляем пути контейнера на его внутренние точки монтирования
+      - MAIN_URL=${MAIN_URL:-http://host.docker.internal}:${PORT}
+      - SCAN_DIR=/data/scan
+      - WORK_DIR=/data/work
+      
+    # Инструкция Docker для разрешения адреса host.docker.internal (особенно важно для Linux)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"      

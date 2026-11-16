@@ -1,0 +1,15 @@
+Dockerfile
+.git
+.gitignore
+.env
+*.yml
+*.sh
+*.bat
+*.md
+*.json
+*.pyc
+
+.venv/
+.vscode/
+.git/
+__pycache__/
